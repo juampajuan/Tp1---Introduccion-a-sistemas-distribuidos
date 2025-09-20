@@ -17,7 +17,8 @@ def parse_args():
     return p.parse_args()
 
 def upload_stop_and_wait(clientsocket, server, src, name, verbose):
-      # Envia encabezado simple (texto) con intencion de upload
+
+    # Envia encabezado simple (texto) con intencion de upload
     # protocolo minimo: "UPLOAD <nombre> <tamaño> \n"
 
     header = f"UPLOAD {name} {os.path.getsize(src)} \n"
@@ -34,9 +35,8 @@ def upload_stop_and_wait(clientsocket, server, src, name, verbose):
                 break
             clientsocket.sendto(chunk, server)
             sent += len(chunk)
-            print(f"\rEnviado {sent} bytes", end="", flush=True)
-
-    print("\n")    
+            
+    print(f"\rEnviado {sent} bytes\n")  
      
 
 
@@ -62,10 +62,7 @@ def main():
     
     clientsocket.close()
     
-    
-    
 
-    
 
 if __name__ == "__main__":
     main()
