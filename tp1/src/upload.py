@@ -25,12 +25,12 @@ def handshake(clientsocket,server, src, name):
     # Arma y envia el paquete inicial con la operación y el user_id inicial hacia el server.
 
     payload = f"UPLOAD {name} {os.path.getsize(src)} \n".encode()
-    paquete = struct.pack("!H1s", USERID_INICIAL, OPERATION) + payload
+    paquete = struct.pack("H1s", USERID_INICIAL, OPERATION) + payload
     clientsocket.sendto(paquete, server)
 
     # Recibo el user_id asignado por el server
     data, addr = clientsocket.recvfrom(2)
-    user_id, = struct.unpack("!H", data)
+    user_id, = struct.unpack("H", data)
     print(f"User ID asignado por el servidor: {user_id}\n")
     return user_id
 
@@ -48,7 +48,7 @@ def upload_stop_and_wait(clientsocket, user_id, server, src, name):
                 break
 
             # Armo y envio el paquete con el user_id, operación y payload
-            paquete = struct.pack("!H1s", user_id, OPERATION) + payload
+            paquete = struct.pack("H1s", user_id, OPERATION) + payload
             clientsocket.sendto(paquete, server)
             
             sent += len(payload)
