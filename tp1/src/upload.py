@@ -42,7 +42,7 @@ def upload_stop_and_wait(clientsocket, user_id, server, src):
                 retries = 0
 
                 while True:
-                    clientsocket.recvfrom(packet.toBytes,server) 
+                    clientsocket.sendto(packet.toBytes(),server) 
                     try:
                         data, _ = clientsocket.recvfrom(MAX_PACKET_SIZE)
                         ack_packet = Packet.from_bytes(data)
