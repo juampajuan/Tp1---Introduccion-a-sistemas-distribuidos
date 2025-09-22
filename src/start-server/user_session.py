@@ -1,16 +1,25 @@
-# Definición de flags para operación
-OP_UPLOAD = 0
-OP_DOWNLOAD = 1
+from queue import Queue
+from enum import Enum
 
-# Definición de flags para estado de sesión
-STATE_CONNECTING = 0
-STATE_ACTIVE = 1
-STATE_DISCONNECTING = 2
-STATE_CONNECTION_CLOSED = 3
+class Estado(Enum):
+    SYNCING = 1
+    ACTIVE = 2
+    CLOSING = 3
 
 class UserSession:
-    def __init__(self, ip: str, port: int, operacion: int, estado: int):
-        self.ip = ip                # Dirección IP (str)
-        self.port = port            # Puerto (int)
-        self.operacion = int(operacion)  # UPLOAD o DOWNLOAD (int, usar 0 o 1)
-        self.estado = int(estado)        # CONNECTING, ACTIVE, DISCONNECTING, CONNECTION_CLOSED (int, usar 0-3)
+    def __init__(self, user_id, addr, sock):
+        self.user_id = user_id
+        self.addr = addr
+        self.sock = sock
+        self.queue = Queue()
+        self.estado = Estado.SYNCING
+
+    def set_estado(self, nuevo_estado):
+        """Cambia el estado de la sesión. nuevo_estado debe ser una instancia de Estado."""
+        if not isinstance(nuevo_estado, Estado):
+            raise ValueError("nuevo_estado debe ser una instancia de Estado")
+        self.estado = nuevo_estado
+
+    def get_estado(self):
+        """Devuelve el estado actual de la sesión."""
+        return self.estado
