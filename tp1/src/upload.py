@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 import argparse
-import struct
 import os
+from handshakeWithServer import handshake_with_server 
 from socket import *
-from constants import MAX_PACKET_SIZE, FLAGS_SIZE, USERID_SIZE, PAYLOAD_SIZE
+from constants import MAX_PACKET_SIZE, PAYLOAD_SIZE
 from packet import Packet
 
 #constantes
-USERID_INICIAL = 65535  # User ID inicial para la handshake
+
 TIMEOUT = 2  # Timeout en segundos
 MAX_RETRIES = 5  # Número máximo de reintentos para enviar un paquete
 
@@ -21,30 +21,6 @@ def parse_args():
     p.add_argument("-r","--protocol", choices=["sw","sr"], default="sw", help="Protocolo de recuperación de errores (sw=Stop&Wait, sr=SelectiveRepeat)")
 
     return p.parse_args()
-
-
-def handshake_with_server(clientsocket,server):
-    
-    # Arma y envia el paquete inicial con user_id=65535, flags CONNECT|SYN
-    try:
-        out_packet = Packet(USERID_INICIAL, flags=Packet.FLAG_CONNECT | Packet.FLAG_SYN)
-        clientsocket.sendto(out_packet.toBytes, server)
-
-        # Recibo el user_id asignado por el server
-        data, _ = clientsocket.recvfrom(MAX_PACKET_SIZE) 
-        in_packet = Packet.from_bytes(data)
-        user_id = in_packet.userId
-        print(f"User ID asignado por el servidor: {user_id}\n")
-
-        ack_packet = Packet(user_id, flags=Packet.FLAG_ACK) 
-        clientsocket.sendto(ack_packet.toBytes, server)
-
-        return user_id
-    
-    except Exception as e:
-        print(f"Error durante el handshake con el servidor: {e}")
-        exit(1)
-
 
 
 def upload_stop_and_wait(clientsocket, user_id, server, src):
@@ -86,6 +62,8 @@ def upload_stop_and_wait(clientsocket, user_id, server, src):
                     break  # Archivo completamente enviado
                 
                 sent += len(payload)
+
+                
                 seq ^= 1  # Alterna el número de secuencia entre 0 y 1
 
     finally:
