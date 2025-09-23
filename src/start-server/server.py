@@ -45,43 +45,52 @@ def handleSession(user_session, packet_inicial):
     user_id = user_session.user_id
     packet = packet_inicial
 
+    # Inicializar sequenceNumber del servidor para la sesión
+    server_seq = 0
+    client_seq = packet.sequenceNumber
+
     while estado == Estado.SYNCING and loops < MAX_LOOPS:
         loops += 1
         if packet is not None and packet.connect == 1:
-            # Si no es un paquete connect no tiene sentido
-            # revisarlo en este punto
             if waiting_sinack:
                 if packet.syn == 0 and packet.ack == 1:
+                    # ACK final del cliente, handshake completo
                     print(f"Finaliza handshake para userId: {user_id}")
                     user_session.set_estado(Estado.ACTIVE)
                     estado = Estado.ACTIVE
                     continue
-                # Si no es el paquete esperado, reenviar syn=1, ack=1
+                # Retransmisión de SYN+ACK
                 response = Packet(
                     user_id,
                     flags=(Packet.FLAG_CONNECT |
                            Packet.FLAG_SYN |
-                           Packet.FLAG_ACK)
+                           Packet.FLAG_ACK),
+                    sequenceNumber=server_seq,
+                    acknowledgmentNumber=client_seq + 1
                 )
                 user_session.sock.sendto(response.toBytes(), user_session.addr)
                 print(
-                    f"Enviando SYNACK al usuario {user_id} "
+                    f"Retransmitiendo SYNACK al usuario {user_id} "
                     f"(iteraciones: {loops})"
                 )
             else:
                 if packet.syn == 1 and packet.ack == 0:
+                    # Primer SYN del cliente
+                    client_seq = packet.sequenceNumber
                     response = Packet(
                         user_id,
                         flags=(Packet.FLAG_CONNECT |
                                Packet.FLAG_SYN |
-                               Packet.FLAG_ACK)
+                               Packet.FLAG_ACK),
+                        sequenceNumber=server_seq,
+                        acknowledgmentNumber=client_seq + 1
                     )
                     print(
                         f"Enviando SYNACK al usuario {user_id} "
                         f"(iteraciones: {loops})"
                     )
-                    user_session.sock.sendto(response.toBytes(),
-                                             user_session.addr)
+                    user_session.sock.sendto(
+                        response.toBytes(), user_session.addr)
                     waiting_sinack = True
         try:
             packet = user_session.queue.get(timeout=TIMEOUT)
@@ -92,8 +101,8 @@ def handleSession(user_session, packet_inicial):
         print(f"Fallo el handshake para el usuario {user_id}")
         return
 
-    # Loop para probar que recibe mensajes del cliente y envia un ack
-    # generico por cada uno,
+    # Loop para probar que recibe mensajes del cliente y
+    # envia un ack generico por cada uno,
     # si despues de 2 segundos no recibe nada cierra la sesion
     while user_session.get_estado() == Estado.ACTIVE:
         try:
@@ -103,9 +112,19 @@ def handleSession(user_session, packet_inicial):
                 f"{packet.to_string()}"
             )
             # Enviar ACK (flag ACK activo)
-            ack_packet = Packet(user_id, flags=Packet.FLAG_ACK)
+            # El ACK debe ser el sequenceNumber
+            # recibido + tamaño real del payload
+            payload_len = len(packet.payload.rstrip(b'\x00'))
+            ack_packet = Packet(
+                user_id,
+                flags=Packet.FLAG_ACK,
+                sequenceNumber=server_seq,
+                acknowledgmentNumber=packet.sequenceNumber + payload_len
+            )
             user_session.sock.sendto(ack_packet.toBytes(), user_session.addr)
-            print(f"[ACTIVE] ACK enviado a userId {user_id}")
+            print(
+                f"[ACTIVE] ACK enviado a userId {user_id}: "
+                f"{ack_packet.to_string()}")
         except Empty:
             print(
                 f"[ACTIVE] Timeout esperando mensaje de userId {user_id}, "

@@ -1,5 +1,5 @@
 import struct
-from constants import PAYLOAD_SIZE
+from constants import MAX_PAYLOAD_SIZE
 
 
 class Packet:
@@ -10,7 +10,7 @@ class Packet:
     | flags (unsigned char)        | 1 byte             |
     | sequenceNumber (unsigned int)| 4 bytes            |
     | acknowledgmentNumber (unsigned int) | 4 bytes     |
-    | payload (bytes)              | PAYLOAD_SIZE bytes |
+    | payload (bytes)              | MAX_PAYLOAD_SIZE bytes |
     ------------------------------------------------------
     Total header: 11 bytes (sin payload)
 
@@ -31,10 +31,10 @@ class Packet:
     def __init__(self, userId: int, payload: bytes = b'', flags: int = 0,
                  sequenceNumber: int = 0, acknowledgmentNumber: int = 0):
         self.userId = userId
-        self.flags = flags & 0x1F
+        self.flags = flags & 0x1F  # Solo 5 bits usados (1 byte)
         self.sequenceNumber = sequenceNumber
         self.acknowledgmentNumber = acknowledgmentNumber
-        self.payload = payload.ljust(PAYLOAD_SIZE, b'\x00')
+        self.payload = payload.ljust(MAX_PAYLOAD_SIZE, b'\x00')
 
     @property
     def syn(self):
@@ -74,7 +74,7 @@ class Packet:
         flags = data[2]
         sequenceNumber = struct.unpack('!I', data[3:7])[0]
         acknowledgmentNumber = struct.unpack('!I', data[7:11])[0]
-        payload = data[11:11+PAYLOAD_SIZE]
+        payload = data[11:11+MAX_PAYLOAD_SIZE]
         return cls(userId,
                    payload,
                    flags,
