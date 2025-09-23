@@ -1,8 +1,19 @@
 import struct
-from constants import MAX_PACKET_SIZE, FLAGS_SIZE, USERID_SIZE, PAYLOAD_SIZE
+from constants import PAYLOAD_SIZE
+
 
 class Packet:
     """
+    Estructura del packet (en bytes):
+    ------------------------------------------------------
+    | userId (unsigned short)      | 2 bytes            |
+    | flags (unsigned char)        | 1 byte             |
+    | sequenceNumber (unsigned int)| 4 bytes            |
+    | acknowledgmentNumber (unsigned int) | 4 bytes     |
+    | payload (bytes)              | PAYLOAD_SIZE bytes |
+    ------------------------------------------------------
+    Total header: 11 bytes (sin payload)
+
     Estructura del byte de flags (de menor a mayor bit):
     Bit 0: SYN      (0x01)
     Bit 1: ACK      (0x02)
@@ -17,10 +28,13 @@ class Packet:
     FLAG_CONNECT = 0x08  # Bit 3
     FLAG_DATA = 0x10     # Bit 4
 
-    def __init__(self, userId: int, payload: bytes = b'', flags: int = 0):
-        self.flags = flags & 0x1F  # Solo 5 bits usados
-        self.userId = userId  # unsigned short (2 bytes)
-        self.payload = payload.ljust(PAYLOAD_SIZE, b'\x00')  # Rellenar si es necesario
+    def __init__(self, userId: int, payload: bytes = b'', flags: int = 0,
+                 sequenceNumber: int = 0, acknowledgmentNumber: int = 0):
+        self.userId = userId
+        self.flags = flags & 0x1F
+        self.sequenceNumber = sequenceNumber
+        self.acknowledgmentNumber = acknowledgmentNumber
+        self.payload = payload.ljust(PAYLOAD_SIZE, b'\x00')
 
     @property
     def syn(self):
@@ -44,8 +58,10 @@ class Packet:
 
     def to_bytes(self) -> bytes:
         return (
-            struct.pack('!B', self.flags) +
             struct.pack('!H', self.userId) +
+            struct.pack('!B', self.flags) +
+            struct.pack('!I', self.sequenceNumber) +
+            struct.pack('!I', self.acknowledgmentNumber) +
             self.payload
         )
 
@@ -54,13 +70,23 @@ class Packet:
 
     @classmethod
     def from_bytes(cls, data: bytes):
-        flags = data[0]
-        userId = struct.unpack('!H', data[FLAGS_SIZE:FLAGS_SIZE+USERID_SIZE])[0]
-        payload = data[FLAGS_SIZE+USERID_SIZE:FLAGS_SIZE+USERID_SIZE+PAYLOAD_SIZE]
-        return cls(userId, payload, flags)
+        userId = struct.unpack('!H', data[0:2])[0]
+        flags = data[2]
+        sequenceNumber = struct.unpack('!I', data[3:7])[0]
+        acknowledgmentNumber = struct.unpack('!I', data[7:11])[0]
+        payload = data[11:11+PAYLOAD_SIZE]
+        return cls(userId,
+                   payload,
+                   flags,
+                   sequenceNumber,
+                   acknowledgmentNumber)
 
     def to_string(self):
         return (
-            f"Packet(flags={self.flags:08b}, syn={int(self.syn)}, ack={int(self.ack)}, fin={int(self.fin)}, "
-            f"connect={int(self.connect)}, data={int(self.data)}, userId={self.userId}, payload={self.payload[:20]}...)"
+            f"Packet(userId={self.userId}, flags={self.flags:08b}, "
+            f"syn={int(self.syn)}, ack={int(self.ack)}, fin={int(self.fin)}, "
+            f"connect={int(self.connect)}, data={int(self.data)}, "
+            f"sequenceNumber={self.sequenceNumber}, "
+            f"acknowledgmentNumber={self.acknowledgmentNumber}, "
+            f"payload={self.payload[:20]}...)"
         )
