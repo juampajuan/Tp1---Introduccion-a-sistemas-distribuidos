@@ -11,3 +11,5 @@ PACKET_HEADER_SIZE = (FLAGS_SIZE +
 MAX_PAYLOAD_SIZE = (SERVER_MTU -
                     PACKET_HEADER_SIZE -
                     28)  # 28 bytes para cabecera IP/UDP
+WINDOWS_SIZE = 32
+SEQUENCE_NUMBER_RANGE = 64

@@ -2,6 +2,7 @@ from socket import *
 import argparse
 from handshakeWithServer import handshake_with_server
 from lib.stop_and_wait import download_stop_and_wait
+from lib.selective_repeat import download_selective_repeat
 from constants import PACKET_HEADER_SIZE
 
 TIMEOUT = 2
@@ -17,14 +18,14 @@ def main():
 
         with socket(AF_INET, SOCK_DGRAM) as clientsocket:
 
-            user_id, mtu = handshake_with_server(clientsocket, server)
+            user_id, mtu = handshake_with_server(clientsocket, server, args.protocol, args.dst, args.name)
 
             max_packet_size = mtu - PACKET_HEADER_SIZE - 28 # 28 bytes para cabecera IP/UDP
 
             if args.protocol == "dsw" :
                 download_stop_and_wait(clientsocket, user_id, server, args.dst, args.name, max_packet_size)
             elif  args.protocol == "dsr" :
-                #download_selective_repeat(clientsocket, user_id, server, args.src, args.name)
+                download_selective_repeat(clientsocket, user_id, server, args.src, args.name, max_packet_size)
                 print("Selective Repeat no implementado.")
             else:
                 print("Funcionalidad desconocida.")
