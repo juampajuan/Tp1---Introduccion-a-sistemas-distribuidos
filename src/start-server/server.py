@@ -140,6 +140,7 @@ def handleSession(user_session, packet_inicial, storage):
         print(f"[HANDSHAKE] Iteración {loops+1} para userId {user_id}")
         loops += 1
         if packet is not None and packet.connect == 1:
+            print(f"[HANDSHAKE] Procesando paquete de userId {user_id}: {packet.to_string()}")
             if waiting_sinack:
                 if packet.syn == 0 and packet.ack == 1:
                     # ACK final del cliente, handshake completo
@@ -165,7 +166,7 @@ def handleSession(user_session, packet_inicial, storage):
                         ruta = res_val[1]["path"]
                         nombre = res_val[1]["nombre"]
                         client_mtu = res_val[1]["MTU"]
-                        res_ruta_y_nombre = validar_ruta_y_nombre(ruta, nombre,storage)
+                        res_ruta_y_nombre = validar_ruta_y_nombre(nombre, ruta,storage)
                         if res_ruta_y_nombre [0] == VALIDACION_OK:
                             #la solicitud es correcta envio sin + ack y OK
                             print(f"Pedido válido de userId {user_id}: servicio {res_val[1]}, path {ruta}, nombre {nombre}")
@@ -183,6 +184,7 @@ def handleSession(user_session, packet_inicial, storage):
                                 f"Enviando SYNACK+OK al usuario {user_id} "
                                 f"(iteraciones: {loops})")
                             user_session.sock.sendto(response.toBytes(), user_session.addr)
+                            waiting_sinack = True
                         else:
                             #hay un error en el nombre o el path envion sin+ack+error
                             error_handshake = True
@@ -231,6 +233,10 @@ def handleSession(user_session, packet_inicial, storage):
     if (user_session.get_estado() == Estado.SYNCING) or error_handshake:
         print(f"Fallo el handshake para el usuario {user_id}")
         return
+
+    print(f"Finalizando sesion para user: {user_id}, estado {user_session.get_estado()}")
+    return
+
 
     # Abrir el archivo solo si el handshake fue exitoso
     archivo = abrir_archivo_usuario(storage, user_id)
@@ -329,6 +335,7 @@ def start(host, port, storage):
                 user_session = server_sessions[user_id]
                 user_session.queue.put(packet)
                 print(f"Paquete encolado para user_id {user_id}")
+                print(f"Paquete encolado: {packet.to_string()}")
             else:
                 print(
                     f"Paquete descartado: user_id {user_id} "
