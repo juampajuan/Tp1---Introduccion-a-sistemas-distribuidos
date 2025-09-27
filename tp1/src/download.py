@@ -2,6 +2,7 @@ from socket import *
 import argparse
 from handshakeWithServer import handshake_with_server
 from lib.stop_and_wait import download_stop_and_wait
+from constants import PACKET_HEADER_SIZE
 
 TIMEOUT = 2
 MAX_RETRIES = 5
@@ -12,17 +13,25 @@ def main():
 
     server = (args.host, args.port)
 
-    with socket(AF_INET, SOCK_DGRAM) as clientsocket:
+    try:
 
-        user_id, max_packet_size = handshake_with_server(clientsocket, server)
+        with socket(AF_INET, SOCK_DGRAM) as clientsocket:
 
-        if args.protocol == "dsw" :
-            download_stop_and_wait(clientsocket, user_id, server, args.dst, args.name, max_packet_size)
-        elif  args.protocol == "dsr" :
-            #download_selective_repeat(clientsocket, user_id, server, args.src, args.name)
-            print("Selective Repeat no implementado.")
-        else:
-            print("Funcionalidad desconocida.")
+            user_id, mtu = handshake_with_server(clientsocket, server)
+
+            max_packet_size = mtu - PACKET_HEADER_SIZE - 28 # 28 bytes para cabecera IP/UDP
+
+            if args.protocol == "dsw" :
+                download_stop_and_wait(clientsocket, user_id, server, args.dst, args.name, max_packet_size)
+            elif  args.protocol == "dsr" :
+                #download_selective_repeat(clientsocket, user_id, server, args.src, args.name)
+                print("Selective Repeat no implementado.")
+            else:
+                print("Funcionalidad desconocida.")
+
+    except Exception:
+        print("Error detectado en instancia de try: Download.")
+        return
 
 
 def parse_args():
