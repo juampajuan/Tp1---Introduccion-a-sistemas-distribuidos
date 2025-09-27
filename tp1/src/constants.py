@@ -1,5 +1,13 @@
-MAX_PACKET_SIZE = 400
-PROTOCOLO_SIZE = 2
+# todas las unidades medidas en bytes
+SERVER_MTU = 700
 FLAGS_SIZE = 1
 USERID_SIZE = 2
-PAYLOAD_SIZE = MAX_PACKET_SIZE - PROTOCOLO_SIZE - FLAGS_SIZE - USERID_SIZE
+SEQ_NUMBER_SIZE = 4
+ACK_NUMBER_SIZE = 4
+PACKET_HEADER_SIZE = (FLAGS_SIZE +
+                      USERID_SIZE +
+                      SEQ_NUMBER_SIZE +
+                      ACK_NUMBER_SIZE)
+MAX_PAYLOAD_SIZE = (SERVER_MTU -
+                    PACKET_HEADER_SIZE -
+                    28)  # 28 bytes para cabecera IP/UDP
