@@ -76,7 +76,7 @@ def upload_selective_repeat(clientsocket, user_id, server, src):
                     if s in window:
                         del window[s]
                         # Deslizo base todo lo posible
-                        while base not in win and base != next_seq:
+                        while base not in window and base != next_seq:
                             base = (base + 1) % SEQUENCE_NUMBER_RANGE
             except timeout:
                 pass  # no llegó ACK ahora
@@ -99,9 +99,6 @@ def upload_selective_repeat(clientsocket, user_id, server, src):
 
     clientsocket.settimeout(None)
     print("SR: envío completo con timers por paquete.")
-
-
-
 
 
 
