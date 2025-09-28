@@ -4,8 +4,6 @@ from handshakeWithServer import handshake_with_server
 from lib.stop_and_wait import download_stop_and_wait
 from lib.selective_repeat import download_selective_repeat
 from constants import PACKET_HEADER_SIZE
-
-TIMEOUT = 2
 MAX_RETRIES = 5
 
 

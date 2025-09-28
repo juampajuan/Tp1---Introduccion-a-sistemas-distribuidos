@@ -27,7 +27,7 @@ def download_stop_and_wait(clientsocket, user_id, server, dest, filename, max_pa
                 acknowledgmentNumber=seq
                 #acknowledgementNumber = package.sequenceNumber
                 )
-            clientsocket.sendto(ack.to_bytes, server)
+            clientsocket.sendto(ack.to_bytes(), server)
             print(
                 f"[ACTIVE] ACK enviado a userId {user_id}: "
                 f"{ack.to_string()}")
