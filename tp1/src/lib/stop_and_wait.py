@@ -23,8 +23,8 @@ def download_stop_and_wait(clientsocket, user_id, server, dest, filename, max_pa
             ack = Packet(
                 user_id,
                 flags=(Packet.FLAG_ACK),
-                sequenceNumber=seq,
-                acknowledgmentNumber=seq
+                sequenceNumber=package.sequenceNumber,
+                acknowledgmentNumber=package.sequenceNumber
                 #acknowledgementNumber = package.sequenceNumber
                 )
             clientsocket.sendto(ack.to_bytes(), server)
