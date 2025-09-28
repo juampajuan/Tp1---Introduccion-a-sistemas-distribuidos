@@ -6,6 +6,8 @@ class Estado(Enum):
     SYNCING = 1
     ACTIVE = 2
     CLOSING = 3
+    ERROR = 4
+    TERMINATED = 5
 
 
 class UserSession:

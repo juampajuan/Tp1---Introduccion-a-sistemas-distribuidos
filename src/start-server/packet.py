@@ -8,6 +8,7 @@ class Packet:
     ------------------------------------------------------
     | userId (unsigned short)      | 2 bytes            |
     | flags (unsigned char)        | 1 byte             |
+    | payloadLength (unsigned int) | 2 bytes            |
     | sequenceNumber (unsigned int)| 4 bytes            |
     | acknowledgmentNumber (unsigned int) | 4 bytes     |
     | payload (bytes)              | MAX_PAYLOAD_SIZE bytes |
@@ -29,9 +30,10 @@ class Packet:
     FLAG_DATA = 0x10     # Bit 4
 
     def __init__(self, userId: int, payload: bytes = b'', flags: int = 0,
-                 sequenceNumber: int = 0, acknowledgmentNumber: int = 0):
+                 payloadLength: int = None, sequenceNumber: int = 0, acknowledgmentNumber: int = 0):
         self.userId = userId
         self.flags = flags & 0x1F  # Solo 5 bits usados (1 byte)
+        self.payloadLength = payloadLength if payloadLength is not None else len(payload)
         self.sequenceNumber = sequenceNumber
         self.acknowledgmentNumber = acknowledgmentNumber
         self.payload = payload.ljust(MAX_PAYLOAD_SIZE, b'\x00')
@@ -60,6 +62,7 @@ class Packet:
         return (
             struct.pack('!H', self.userId) +
             struct.pack('!B', self.flags) +
+            struct.pack('!H', self.payloadLength) +
             struct.pack('!I', self.sequenceNumber) +
             struct.pack('!I', self.acknowledgmentNumber) +
             self.payload
@@ -72,18 +75,21 @@ class Packet:
     def from_bytes(cls, data: bytes):
         userId = struct.unpack('!H', data[0:2])[0]
         flags = data[2]
-        sequenceNumber = struct.unpack('!I', data[3:7])[0]
-        acknowledgmentNumber = struct.unpack('!I', data[7:11])[0]
-        payload = data[11:11+MAX_PAYLOAD_SIZE]
+        payloadLength = struct.unpack('!H', data[3:5])[0]
+        sequenceNumber = struct.unpack('!I', data[5:9])[0]
+        acknowledgmentNumber = struct.unpack('!I', data[9:13])[0]
+        payload = data[13:13+MAX_PAYLOAD_SIZE]
         return cls(userId,
                    payload,
                    flags,
+                   payloadLength,
                    sequenceNumber,
                    acknowledgmentNumber)
 
     def to_string(self):
         return (
             f"Packet(userId={self.userId}, flags={self.flags:08b}, "
+            f"payloadLength={self.payloadLength}, "
             f"syn={int(self.syn)}, ack={int(self.ack)}, fin={int(self.fin)}, "
             f"connect={int(self.connect)}, data={int(self.data)}, "
             f"sequenceNumber={self.sequenceNumber}, "

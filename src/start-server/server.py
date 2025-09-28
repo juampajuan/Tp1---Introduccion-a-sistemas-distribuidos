@@ -1,11 +1,12 @@
 import socket
 import os
 import threading
+from time import sleep
 
 from constants import ERROR_FALTA_CAMPO,ERROR_SERVICIO_INVALIDO, ERROR_PATH_INCORRECTO, ERROR_NOMBRE_INVALIDO,VALIDACION_OK,NOMBRES_RESERVADOS,CARACTERES_NO_PERMITIDOS
 from constants import SERVER_MTU
 from packet import Packet
-from user_session import UserSession
+from user_session import UserSession, Estado
 from queue import Empty
 
 MAX_PACKET_SIZE = 400
@@ -99,6 +100,64 @@ def validar_ruta_y_nombre(nombre, ruta, storage):
     return VALIDACION_OK, "OK"
 
 
+
+def  send_file(user_session, servicio, ruta, nombre):
+    print(f"Enviando archivo {ruta+nombre} a {user_session.user_id} usando {servicio}")
+
+    iteracion = 0
+
+    if servicio == "sw":
+        while iteracion < 5 :
+            print(f"Simulando envio de chunk a {user_session.user_id}")
+            sleep(1)
+            print(f"Simulando recibo de ack de {user_session.user_id}")
+            sleep(1)
+            iteracion += 1
+
+        print(f"Simulando envio de ultimo chunk y flag fin")
+        sleep(1)
+        print(f"Simulando recibo de ack final de {user_session.user_id}")
+
+    if servicio == "sr":
+        while iteracion < 5 :
+            print(f"Simulando envio de chunk a {user_session.user_id}")
+            sleep(1)
+            print(f"Simulando recibo de ack de {user_session.user_id}")
+            sleep(1)
+            iteracion += 1
+        print(f"Simulando envio de ultimo chunk y flag fin")
+        sleep(1)
+        print(f"Simulando recibo de ack final de {user_session.user_id}")
+
+
+def receive_file(user_session, servicio, nombre, storage):
+    print(f"Recibiendo archivo {nombre} de {user_session.user_id} usando {servicio}")
+
+    iteracion = 0
+    if servicio == "dsw":
+        while iteracion < 5 :
+            print(f"Simulando receive de {user_session.user_id}")
+            sleep(1)
+            print(f"Simulando envio de ack a {user_session.user_id}")
+            sleep(1)
+            iteracion += 1
+
+        print(f"Simulando receive de ultimo chunk")
+        sleep(1)
+        print(f"Simulando simulando envio de ack con flag fin {user_session.user_id}")
+
+    if servicio == "dsr":
+        while iteracion < 5 :
+            print(f"Simulando receive de {user_session.user_id}")
+            sleep(1)
+            print(f"Simulando envio de ack a {user_session.user_id}")
+            sleep(1)
+            iteracion += 1
+        print(f"Simulando receive de ultimo chunk")
+        sleep(1)
+        print(f"Simulando simulando envio de ack con flag fin {user_session.user_id}")
+
+
 def handleSession(user_session, packet_inicial, storage):
     """
     Handshake tipo TCP:
@@ -109,7 +168,7 @@ def handleSession(user_session, packet_inicial, storage):
     - Si se itera más de tres veces sin finalizar handshake aborta
     Luego, si el estado es ACTIVE, recibe mensajes y responde con ACK.
     """
-    from user_session import Estado
+
     TIMEOUT = 1  # 1 segundo
     MAX_LOOPS = 4
 
@@ -122,6 +181,7 @@ def handleSession(user_session, packet_inicial, storage):
     packet = packet_inicial
     ruta=""
     nombre=""
+    servicio=""
     print(f"[HANDSHAKE] Packet inicial recibido: {packet.to_string()}")
 
     # Inicializar sequenceNumber del servidor para la sesión
@@ -163,6 +223,7 @@ def handleSession(user_session, packet_inicial, storage):
                     if res_val[0] == VALIDACION_OK:
                         #si es valido el modo de servicio
                         #queda validar nombe y path
+                        servicio = res_val[1]["servicio"]
                         ruta = res_val[1]["path"]
                         nombre = res_val[1]["nombre"]
                         client_mtu = res_val[1]["MTU"]
@@ -174,6 +235,7 @@ def handleSession(user_session, packet_inicial, storage):
                             response = Packet(
                                 user_id,
                                 payload,
+                                payloadLength=len(payload),
                                 flags= (Packet.FLAG_CONNECT |
                                         Packet.FLAG_SYN |
                                         Packet.FLAG_ACK),
@@ -193,6 +255,7 @@ def handleSession(user_session, packet_inicial, storage):
                             response = Packet(
                                 user_id,
                                 payload,
+                                payloadLength=len(payload),
                                 flags= (Packet.FLAG_CONNECT |
                                         Packet.FLAG_SYN |
                                         Packet.FLAG_ACK),
@@ -212,6 +275,7 @@ def handleSession(user_session, packet_inicial, storage):
                         response = Packet(
                             user_id,
                             payload,
+                            payloadLength=len(payload),
                             flags= (Packet.FLAG_CONNECT |
                                     Packet.FLAG_SYN |
                                     Packet.FLAG_ACK),
@@ -234,63 +298,20 @@ def handleSession(user_session, packet_inicial, storage):
         print(f"Fallo el handshake para el usuario {user_id}")
         return
 
-    print(f"Finalizando sesion para user: {user_id}, estado {user_session.get_estado()}")
-    return
 
+    if servicio in ["dsw", "dsr"]:
+        send_file(user_session, servicio, ruta, nombre)
 
-    # Abrir el archivo solo si el handshake fue exitoso
-    archivo = abrir_archivo_usuario(storage, user_id)
-    if archivo is None:
-        print(f"No se pudo abrir archivo para userId {user_id}, abortando sesión.")
+    if servicio in ["sw", "sr"]:
+        receive_file(user_session, servicio, ruta, storage)
+
+    if user_session.get_estado() == Estado.ERROR:
+        print(f"Ocurrio un error en la sesion del usuario {user_id}")
         return
-
-    # Loop para probar que recibe mensajes del cliente y
-    # envia un ack generico por cada uno,
-    # si despues de 2 segundos no recibe nada cierra la sesion
-    while user_session.get_estado() == Estado.ACTIVE:
-        try:
-            packet = user_session.queue.get(timeout=TIMEOUT)
-            print(
-                f"[ACTIVE] Recibido de userId {user_id}: "
-                f"{packet.to_string()}"
-            )
-            # Escribir el payload en el buffer
-            payload = packet.payload.rstrip(b'\x00')
-            payload_len = len(payload)
-            if buffer_offset + payload_len <= BUFFER_SIZE:
-                buffer[buffer_offset:buffer_offset+payload_len] = payload
-                buffer_offset += payload_len
-            else:
-                # Buffer lleno, volcar al archivo y vaciar buffer
-                escribir_en_archivo_usuario(archivo, buffer, buffer_offset, fsync=False)
-                print(f"Buffer lleno, volcado al archivo para userId {user_id}")
-                buffer_offset = 0
-                # Escribir el nuevo payload en buffer vacío
-                buffer[buffer_offset:buffer_offset+payload_len] = payload
-                buffer_offset += payload_len
-            # Enviar ACK (flag ACK activo)
-            ack_packet = Packet(
-                user_id,
-                flags=Packet.FLAG_ACK,
-                sequenceNumber=server_seq,
-                acknowledgmentNumber=packet.sequenceNumber + payload_len
-            )
-            user_session.sock.sendto(ack_packet.toBytes(), user_session.addr)
-            print(
-                f"[ACTIVE] ACK enviado a userId {user_id}: "
-                f"{ack_packet.to_string()}")
-        except Empty:
-            print(
-                f"[ACTIVE] Timeout esperando mensaje de userId {user_id}, "
-                f"cerrando sesión activa."
-            )
-            break
-
-    # Al salir del while, si el buffer tiene datos, volcarlos al archivo y fsync
-    escribir_en_archivo_usuario(archivo, buffer, buffer_offset, fsync=True)
-    print(f"Buffer final guardado en archivo para userId {user_id}")
-    archivo.close()
-    print(f"Archivo cerrado para userId {user_id}")
+    else:
+        print(f"Cerrando sesion para user: {user_id}, estado {user_session.get_estado()}")
+        user_session.set_estado(Estado.CLOSING)
+    return
 
 
 def start(host, port, storage):
@@ -331,13 +352,15 @@ def start(host, port, storage):
                                      args=(user_session, packet, storage),
                                      daemon=True)
                 t.start()
-            elif user_id in server_sessions:
+                continue
+            if user_id in server_sessions:
                 user_session = server_sessions[user_id]
                 user_session.queue.put(packet)
                 print(f"Paquete encolado para user_id {user_id}")
                 print(f"Paquete encolado: {packet.to_string()}")
-            else:
-                print(
+                continue
+            #no es usuario nuevo ni conocido
+            print(
                     f"Paquete descartado: user_id {user_id} "
                     f"no reconocido."
                 )
