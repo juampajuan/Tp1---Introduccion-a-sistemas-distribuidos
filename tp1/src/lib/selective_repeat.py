@@ -50,7 +50,9 @@ def download_selective_repeat(clientsocket, user_id, server, dest, filename, max
                         if i in buffer: 
 
                             payload = (buffer[i]).payload
+                            buffer.pop(i) #Borro entrada para mantener buffer pequeño
 
+                            #Añadir logica rstrip
                             f.write(payload)
                             current_base+=1
                             received_total+= len(payload)
