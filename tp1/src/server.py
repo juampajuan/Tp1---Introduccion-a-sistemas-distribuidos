@@ -2,6 +2,8 @@ import socket
 import os
 import threading
 
+from constants import ERROR_FALTA_CAMPO,ERROR_SERVICIO_INVALIDO, ERROR_PATH_INCORRECTO, ERROR_NOMBRE_INVALIDO,VALIDACION_OK,NOMBRES_RESERVADOS,CARACTERES_NO_PERMITIDOS
+from constants import SERVER_MTU
 from packet import Packet
 from user_session import UserSession
 from queue import Empty
@@ -10,6 +12,7 @@ MAX_PACKET_SIZE = 400
 MAX_CANT_REVISADOS = 4
 USER_ID_NUEVO = 65535
 TIMEOUT = 1  # 1 segundo
+
 
 user_id_counter = 1  # Comenzar en 1 para evitar colisión con 65535
 user_id_lock = threading.Lock()
@@ -45,6 +48,56 @@ def escribir_en_archivo_usuario(archivo, buffer, buffer_offset, fsync=False):
     if fsync:
         os.fsync(archivo.fileno())
 
+def validar_pedido(packet):
+    """
+    Valida el payload con el pedido del cliente y extrae servicio, path, nombre y MTU.
+    Devuelve una tupla:
+    (1, "ERROR: Falta el campo <campo>") si falta un campo
+    (2, "ERROR: servicio <valor> no valido") si el servicio no es válido
+    (3, "ERROR: MTU <valor> no válido") si MTU no es mayor a 50
+    (0, {"servicio":..., "path":..., "nombre":..., "MTU":...}) si el pedido es correcto
+    """
+    payload_str = packet.payload.rstrip(b'\x00').decode('utf-8').strip()
+    fields = payload_str.split('\n')
+    valores = {}
+    for field in fields:
+        if '|' in field:
+            key, value = field.split('|', 1)
+            valores[key] = value
+    # Validar presencia de los cuatro campos
+    for campo in ["servicio", "path", "nombre", "MTU"]:
+        if campo not in valores or not valores[campo]:
+            return (ERROR_FALTA_CAMPO, f"ERROR: Falta el campo {campo} en el pedido de conexion")
+    # Validar servicio
+    servicio_valido = valores["servicio"] in ["sw", "sr", "dsw", "dsr"]
+    if not servicio_valido:
+        return (ERROR_SERVICIO_INVALIDO, f"ERROR: servicio {valores['servicio']} no valido")
+    # Validar MTU mayor a 50
+    try:
+        mtu_val = int(valores["MTU"])
+        if mtu_val <= 50:
+            return (5, f"ERROR: MTU {mtu_val} no válido, debe ser mayor a 50")
+    except ValueError:
+        return (5, f"ERROR: MTU {valores['MTU']} no es un número válido")
+    # Si el pedido es correcto
+    print(f"[ACTIVE] servicio: {valores['servicio']}, path: {valores['path']}, nombre: {valores['nombre']}, MTU: {valores['MTU']}")
+    return (VALIDACION_OK, valores)
+
+
+def validar_ruta_y_nombre(nombre, ruta, storage):
+    # 1) Validar caracteres no permitidos en el nombre
+    for c in CARACTERES_NO_PERMITIDOS:
+        if c in nombre:
+            return (ERROR_NOMBRE_INVALIDO, f"Error: nombre de archivo invalido ({nombre})")
+    # 2) Validar nombres reservados
+    if nombre in NOMBRES_RESERVADOS:
+        return (ERROR_NOMBRE_INVALIDO, f"Error: no se permiten archivos con el nombre {nombre}")
+    # 3) Validar ruta
+    if ruta != storage:
+        return (ERROR_PATH_INCORRECTO, "Error: path incorrecto")
+    # 4) Si pasa todas las validaciones
+    return VALIDACION_OK, "OK"
+
 
 def handleSession(user_session, packet_inicial, storage):
     """
@@ -60,28 +113,34 @@ def handleSession(user_session, packet_inicial, storage):
     TIMEOUT = 1  # 1 segundo
     MAX_LOOPS = 4
 
+    res_packet = None
+    payload =""
     loops = 0
     waiting_sinack = False
     estado = user_session.get_estado()
     user_id = user_session.user_id
     packet = packet_inicial
-
+    ruta=""
+    nombre=""
     print(f"[HANDSHAKE] Packet inicial recibido: {packet.to_string()}")
 
     # Inicializar sequenceNumber del servidor para la sesión
     server_seq = 0
     client_seq = packet.sequenceNumber
-
+    client_mtu = 0
     # Buffer de 5MB para almacenar payloads
     BUFFER_SIZE = 5 * 1024 * 1024  # 5MB
     buffer = bytearray(BUFFER_SIZE)
     buffer_offset = 0
     archivo = None  # Solo abrir después del handshake
+    error_handshake = False
+
 
     while estado == Estado.SYNCING and loops < MAX_LOOPS:
         print(f"[HANDSHAKE] Iteración {loops+1} para userId {user_id}")
         loops += 1
         if packet is not None and packet.connect == 1:
+            print(f"[HANDSHAKE] Procesando paquete de userId {user_id}: {packet.to_string()}")
             if waiting_sinack:
                 if packet.syn == 0 and packet.ack == 1:
                     # ACK final del cliente, handshake completo
@@ -90,14 +149,6 @@ def handleSession(user_session, packet_inicial, storage):
                     estado = Estado.ACTIVE
                     continue
                 # Retransmisión de SYN+ACK
-                response = Packet(
-                    user_id,
-                    flags=(Packet.FLAG_CONNECT |
-                           Packet.FLAG_SYN |
-                           Packet.FLAG_ACK),
-                    sequenceNumber=server_seq,
-                    acknowledgmentNumber=client_seq + 1
-                )
                 user_session.sock.sendto(response.toBytes(), user_session.addr)
                 print(
                     f"Retransmitiendo SYNACK al usuario {user_id} "
@@ -107,21 +158,71 @@ def handleSession(user_session, packet_inicial, storage):
                 if packet.syn == 1 and packet.ack == 0:
                     # Primer SYN del cliente
                     client_seq = packet.sequenceNumber
-                    response = Packet(
-                        user_id,
-                        flags=(Packet.FLAG_CONNECT |
-                               Packet.FLAG_SYN |
-                               Packet.FLAG_ACK),
-                        sequenceNumber=server_seq,
-                        acknowledgmentNumber=client_seq + 1
-                    )
-                    print(
-                        f"Enviando SYNACK al usuario {user_id} "
-                        f"(iteraciones: {loops})"
-                    )
-                    user_session.sock.sendto(
-                        response.toBytes(), user_session.addr)
-                    waiting_sinack = True
+                    # Validar cliente y extraer campos
+                    res_val = validar_pedido(packet)
+                    if res_val[0] == VALIDACION_OK:
+                        #si es valido el modo de servicio
+                        #queda validar nombe y path
+                        ruta = res_val[1]["path"]
+                        nombre = res_val[1]["nombre"]
+                        client_mtu = res_val[1]["MTU"]
+                        res_ruta_y_nombre = validar_ruta_y_nombre(nombre, ruta,storage)
+                        if res_ruta_y_nombre [0] == VALIDACION_OK:
+                            #la solicitud es correcta envio sin + ack y OK
+                            print(f"Pedido válido de userId {user_id}: servicio {res_val[1]}, path {ruta}, nombre {nombre}")
+                            payload = f"OK\nMTU={SERVER_MTU}".encode('utf-8')
+                            response = Packet(
+                                user_id,
+                                payload,
+                                flags= (Packet.FLAG_CONNECT |
+                                        Packet.FLAG_SYN |
+                                        Packet.FLAG_ACK),
+                                sequenceNumber=server_seq,
+                                acknowledgmentNumber=client_seq + len(payload.rstrip(b'\x00'))
+                                )
+                            print(
+                                f"Enviando SYNACK+OK al usuario {user_id} "
+                                f"(iteraciones: {loops})")
+                            user_session.sock.sendto(response.toBytes(), user_session.addr)
+                            waiting_sinack = True
+                        else:
+                            #hay un error en el nombre o el path envion sin+ack+error
+                            error_handshake = True
+                            print(f"Error en el nombre o path del archivo para userId {user_id}: {res_ruta_y_nombre[1]}")
+                            payload = res_ruta_y_nombre[1].encode('utf-8')
+                            response = Packet(
+                                user_id,
+                                payload,
+                                flags= (Packet.FLAG_CONNECT |
+                                        Packet.FLAG_SYN |
+                                        Packet.FLAG_ACK),
+                                sequenceNumber=server_seq,
+                                acknowledgmentNumber=client_seq + len(payload.rstrip(b'\x00'))
+                                )
+                            print(
+                                f"Enviando SYNACK+ERROR al usuario {user_id} "
+                                f"(iteraciones: {loops})")
+                            user_session.sock.sendto(response.toBytes(), user_session.addr)
+                            waiting_sinack = True
+                    else:
+                        #hay un error en el pedido
+                        error_handshake = True
+                        print(f"Pedido inválido de userId {user_id}: {res_val[1]}")
+                        payload = res_val[1].encode('utf-8')
+                        response = Packet(
+                            user_id,
+                            payload,
+                            flags= (Packet.FLAG_CONNECT |
+                                    Packet.FLAG_SYN |
+                                    Packet.FLAG_ACK),
+                            sequenceNumber=server_seq,
+                            acknowledgmentNumber=client_seq + len(payload.rstrip(b'\x00'))
+                            )
+                        print(
+                            f"Enviando SYNACK+ERROR al usuario {user_id} "
+                            f"(iteraciones: {loops})")
+                        user_session.sock.sendto(response.toBytes(), user_session.addr)
+                        waiting_sinack = True
         try:
             print(f"[HANDSHAKE] Esperando paquete de userId {user_id}...")
             packet = user_session.queue.get(timeout=TIMEOUT)
@@ -129,9 +230,13 @@ def handleSession(user_session, packet_inicial, storage):
             print(f"[HANDSHAKE] Timeout esperando paquete de userId {user_id}")
             packet = None
 
-    if user_session.get_estado() == Estado.SYNCING:
+    if (user_session.get_estado() == Estado.SYNCING) or error_handshake:
         print(f"Fallo el handshake para el usuario {user_id}")
         return
+
+    print(f"Finalizando sesion para user: {user_id}, estado {user_session.get_estado()}")
+    return
+
 
     # Abrir el archivo solo si el handshake fue exitoso
     archivo = abrir_archivo_usuario(storage, user_id)
@@ -230,6 +335,7 @@ def start(host, port, storage):
                 user_session = server_sessions[user_id]
                 user_session.queue.put(packet)
                 print(f"Paquete encolado para user_id {user_id}")
+                print(f"Paquete encolado: {packet.to_string()}")
             else:
                 print(
                     f"Paquete descartado: user_id {user_id} "
