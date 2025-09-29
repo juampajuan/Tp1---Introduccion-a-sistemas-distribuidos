@@ -2,9 +2,11 @@ import socket
 import os
 import threading
 
-from constants import ERROR_FALTA_CAMPO,ERROR_SERVICIO_INVALIDO, ERROR_PATH_INCORRECTO, ERROR_NOMBRE_INVALIDO,VALIDACION_OK,NOMBRES_RESERVADOS,CARACTERES_NO_PERMITIDOS
-from constants import SERVER_MTU
-from packet import Packet
+from lib.constants import ERROR_FALTA_CAMPO,ERROR_SERVICIO_INVALIDO, ERROR_PATH_INCORRECTO, ERROR_NOMBRE_INVALIDO,VALIDACION_OK,NOMBRES_RESERVADOS,CARACTERES_NO_PERMITIDOS
+from lib.constants import SERVER_MTU, PACKET_HEADER_SIZE
+from lib.stop_and_wait import upload_stop_and_wait, download_stop_and_wait
+from lib.selective_repeat import upload_selective_repeat, download_selective_repeat
+from lib.packet import Packet
 from user_session import UserSession
 from queue import Empty
 
@@ -84,7 +86,7 @@ def validar_pedido(packet):
     return (VALIDACION_OK, valores)
 
 
-def validar_ruta_y_nombre(nombre, ruta, storage):
+def validar_nombre(nombre):
     # 1) Validar caracteres no permitidos en el nombre
     for c in CARACTERES_NO_PERMITIDOS:
         if c in nombre:
@@ -92,11 +94,26 @@ def validar_ruta_y_nombre(nombre, ruta, storage):
     # 2) Validar nombres reservados
     if nombre in NOMBRES_RESERVADOS:
         return (ERROR_NOMBRE_INVALIDO, f"Error: no se permiten archivos con el nombre {nombre}")
-    # 3) Validar ruta
-    if ruta != storage:
-        return (ERROR_PATH_INCORRECTO, "Error: path incorrecto")
-    # 4) Si pasa todas las validaciones
+    # 3) Si pasa todas las validaciones
     return VALIDACION_OK, "OK"
+
+def executing_protocol(protocol, user_session, user_id, archivo, max_packet_size):
+    if protocol in ["sw", "dsw"]:
+        print(f"[ACTIVE] Iniciando protocolo Stop and Wait para userId {user_id}")
+        if protocol == "sw":
+            download_stop_and_wait(user_session, user_id, user_session.addr, archivo.name, max_packet_size, from_server = True)
+        else:
+            upload_stop_and_wait(user_session, user_id, user_session.addr, archivo.name, max_packet_size, from_server= True)
+    elif protocol in ["sr", "dsr"]:
+        print(f"[ACTIVE] Iniciando protocolo Selective Repeat para userId {user_id}")
+        if protocol == "sr":
+            download_selective_repeat(user_session.sock, user_id, user_session.addr, archivo.name, max_packet_size)
+        else:
+            upload_selective_repeat(user_session.sock, user_id, user_session.addr, archivo.name, max_packet_size)
+    else:
+        print(f"Protocolo desconocido para userId {user_id}: {protocol}")
+        return
+
 
 
 def handleSession(user_session, packet_inicial, storage):
@@ -135,7 +152,6 @@ def handleSession(user_session, packet_inicial, storage):
     archivo = None  # Solo abrir después del handshake
     error_handshake = False
 
-
     while estado == Estado.SYNCING and loops < MAX_LOOPS:
         print(f"[HANDSHAKE] Iteración {loops+1} para userId {user_id}")
         loops += 1
@@ -160,14 +176,15 @@ def handleSession(user_session, packet_inicial, storage):
                     client_seq = packet.sequenceNumber
                     # Validar cliente y extraer campos
                     res_val = validar_pedido(packet)
+                    print("[DEBUGGING] hola como estas, pase por aca")
                     if res_val[0] == VALIDACION_OK:
                         #si es valido el modo de servicio
                         #queda validar nombe y path
                         ruta = res_val[1]["path"]
                         nombre = res_val[1]["nombre"]
                         client_mtu = res_val[1]["MTU"]
-                        res_ruta_y_nombre = validar_ruta_y_nombre(nombre, ruta,storage)
-                        if res_ruta_y_nombre [0] == VALIDACION_OK:
+                        res_nombre = validar_nombre(nombre)
+                        if res_nombre [0] == VALIDACION_OK:
                             #la solicitud es correcta envio sin + ack y OK
                             print(f"Pedido válido de userId {user_id}: servicio {res_val[1]}, path {ruta}, nombre {nombre}")
                             payload = f"OK\nMTU={SERVER_MTU}".encode('utf-8')
@@ -188,8 +205,8 @@ def handleSession(user_session, packet_inicial, storage):
                         else:
                             #hay un error en el nombre o el path envion sin+ack+error
                             error_handshake = True
-                            print(f"Error en el nombre o path del archivo para userId {user_id}: {res_ruta_y_nombre[1]}")
-                            payload = res_ruta_y_nombre[1].encode('utf-8')
+                            print(f"Error en el nombre o path del archivo para userId {user_id}: {res_nombre[1]}")
+                            payload = res_nombre[1].encode('utf-8')
                             response = Packet(
                                 user_id,
                                 payload,
@@ -233,65 +250,13 @@ def handleSession(user_session, packet_inicial, storage):
     if (user_session.get_estado() == Estado.SYNCING) or error_handshake:
         print(f"Fallo el handshake para el usuario {user_id}")
         return
+    
+    max_packet_size = int(client_mtu) - 28 - PACKET_HEADER_SIZE  # 28 bytes para cabecera IP/UDP
+    executing_protocol(res_val[1]["servicio"], user_session, user_id, archivo, max_packet_size)
+
 
     print(f"Finalizando sesion para user: {user_id}, estado {user_session.get_estado()}")
     return
-
-
-    # Abrir el archivo solo si el handshake fue exitoso
-    archivo = abrir_archivo_usuario(storage, user_id)
-    if archivo is None:
-        print(f"No se pudo abrir archivo para userId {user_id}, abortando sesión.")
-        return
-
-    # Loop para probar que recibe mensajes del cliente y
-    # envia un ack generico por cada uno,
-    # si despues de 2 segundos no recibe nada cierra la sesion
-    while user_session.get_estado() == Estado.ACTIVE:
-        try:
-            packet = user_session.queue.get(timeout=TIMEOUT)
-            print(
-                f"[ACTIVE] Recibido de userId {user_id}: "
-                f"{packet.to_string()}"
-            )
-            # Escribir el payload en el buffer
-            payload = packet.payload.rstrip(b'\x00')
-            payload_len = len(payload)
-            if buffer_offset + payload_len <= BUFFER_SIZE:
-                buffer[buffer_offset:buffer_offset+payload_len] = payload
-                buffer_offset += payload_len
-            else:
-                # Buffer lleno, volcar al archivo y vaciar buffer
-                escribir_en_archivo_usuario(archivo, buffer, buffer_offset, fsync=False)
-                print(f"Buffer lleno, volcado al archivo para userId {user_id}")
-                buffer_offset = 0
-                # Escribir el nuevo payload en buffer vacío
-                buffer[buffer_offset:buffer_offset+payload_len] = payload
-                buffer_offset += payload_len
-            # Enviar ACK (flag ACK activo)
-            ack_packet = Packet(
-                user_id,
-                flags=Packet.FLAG_ACK,
-                sequenceNumber=server_seq,
-                acknowledgmentNumber=packet.sequenceNumber + payload_len
-            )
-            user_session.sock.sendto(ack_packet.toBytes(), user_session.addr)
-            print(
-                f"[ACTIVE] ACK enviado a userId {user_id}: "
-                f"{ack_packet.to_string()}")
-        except Empty:
-            print(
-                f"[ACTIVE] Timeout esperando mensaje de userId {user_id}, "
-                f"cerrando sesión activa."
-            )
-            break
-
-    # Al salir del while, si el buffer tiene datos, volcarlos al archivo y fsync
-    escribir_en_archivo_usuario(archivo, buffer, buffer_offset, fsync=True)
-    print(f"Buffer final guardado en archivo para userId {user_id}")
-    archivo.close()
-    print(f"Archivo cerrado para userId {user_id}")
-
 
 def start(host, port, storage):
     # Validar y preparar la ruta de almacenamiento

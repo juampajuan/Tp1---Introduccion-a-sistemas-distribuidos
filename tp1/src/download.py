@@ -3,7 +3,7 @@ import argparse
 from handshakeWithServer import handshake_with_server
 from lib.stop_and_wait import download_stop_and_wait
 from lib.selective_repeat import download_selective_repeat
-from constants import PACKET_HEADER_SIZE
+from lib.constants import PACKET_HEADER_SIZE
 
 
 def parse_args():
@@ -26,13 +26,13 @@ def main():
 
         with socket(AF_INET, SOCK_DGRAM) as clientsocket:
 
-            user_id, mtu = handshake_with_server(clientsocket, server, args.protocol, args.name)
+            user_id, mtu = handshake_with_server(clientsocket, server, args.protocol, "d" + args.dst, args.name)
 
             max_packet_size = mtu - PACKET_HEADER_SIZE - 28 # 28 bytes para cabecera IP/UDP
 
-            if args.protocol == "dsw" :
+            if args.protocol == "sw" :
                 download_stop_and_wait(clientsocket, user_id, server, args.dst, max_packet_size)
-            elif  args.protocol == "dsr" :
+            elif  args.protocol == "sr" :
                 download_selective_repeat(clientsocket, user_id, server, args.dst, max_packet_size)
             else:
                 print("Funcionalidad desconocida.")

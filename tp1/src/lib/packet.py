@@ -1,5 +1,5 @@
 import struct
-from constants import MAX_PAYLOAD_SIZE
+from .constants import MAX_PAYLOAD_SIZE
 
 
 class Packet:

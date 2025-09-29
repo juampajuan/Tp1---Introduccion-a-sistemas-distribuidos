@@ -1,5 +1,5 @@
-from constants import PACKET_HEADER_SIZE, MAX_PAYLOAD_SIZE
-from packet import Packet
+from lib.constants import PACKET_HEADER_SIZE, MAX_PAYLOAD_SIZE
+from lib.packet import Packet
 
 USERID_INICIAL = 65535  # User ID inicial para la handshake
 TIMEOUT = 5
@@ -16,18 +16,16 @@ def separar_ruta(ruta):
     return path, filename
 
 
-def handshake_with_server(clientsocket, server, servicio, path_para_server):
+def handshake_with_server(clientsocket, server, servicio, path_para_server, nombre_archivo_server):
 
     clientsocket.settimeout(TIMEOUT)  # Timeout de 5 segundos
-
-    path_archivo_server, nombre_archivo_server = separar_ruta(path_para_server)
     
     # Arma y envia el paquete inicial con user_id=65535, flags CONNECT|SYN
 
     while True:
          
         try:
-            payload_peticion = f"servicio|{servicio}\npath|{path_archivo_server}\nnombre|{nombre_archivo_server}\nMTU|700".encode("utf-8")
+            payload_peticion = f"servicio|{servicio}\npath|{path_para_server}\nnombre|{nombre_archivo_server}\nMTU|700".encode("utf-8")
             out_packet = Packet(USERID_INICIAL, payload=payload_peticion, flags=Packet.FLAG_CONNECT | Packet.FLAG_SYN)
             clientsocket.sendto(out_packet.toBytes(), server)
 

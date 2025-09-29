@@ -1,9 +1,10 @@
-from ..packet import Packet
+from .packet import Packet
 
 TIMEOUT = 2  # Timeout en segundos
 MAX_RETRIES = 5  # Timeout en segundos
 
-def upload_stop_and_wait(clientsocket, user_id, server, src, max_packet_size):
+def upload_stop_and_wait(clientsocket, user_id, server, src, max_packet_size, from_server = False, user_session = None):
+
     clientsocket.settimeout(TIMEOUT)
     seq = 0            # alternante: 0,1,0,1...
     sent = 0
@@ -18,6 +19,7 @@ def upload_stop_and_wait(clientsocket, user_id, server, src, max_packet_size):
 
                 retries = 0
                 while True:
+                        
                     clientsocket.sendto(packet.toBytes(), server)
                     try:
                         data, _ = clientsocket.recvfrom(max_packet_size)

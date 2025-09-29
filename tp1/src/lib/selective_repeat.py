@@ -2,8 +2,8 @@ import socket
 import os
 import time
 
-from ..constants import WINDOW_SIZE, SEQUENCE_NUMBER_RANGE, MAX_PAYLOAD_SIZE
-from ..packet import Packet
+from .constants import WINDOW_SIZE, SEQUENCE_NUMBER_RANGE, MAX_PAYLOAD_SIZE
+from .packet import Packet
 
 MAX_RETRIES = 5  # Número máximo de reintentos para enviar un paquete
 RECV_TIMEOUT = 0.01 # para no bloquear en recvfrom

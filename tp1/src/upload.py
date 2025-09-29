@@ -6,8 +6,8 @@ from handshakeWithServer import handshake_with_server
 from lib.selective_repeat import upload_selective_repeat
 from lib.stop_and_wait import upload_stop_and_wait
 from socket import *
-from constants import MAX_PAYLOAD_SIZE, WINDOW_SIZE, SEQUENCE_NUMBER_RANGE,PACKET_HEADER_SIZE
-from packet import Packet
+from lib.constants import MAX_PAYLOAD_SIZE, WINDOW_SIZE, SEQUENCE_NUMBER_RANGE,PACKET_HEADER_SIZE
+from lib.packet import Packet
 
 #constantes
 TIMEOUT = 2  # Timeout en segundos
@@ -17,11 +17,12 @@ TIMEOUT_RTX = 0.8 # Timeout para retransmisión en Selective Repeat
 
 def parse_args():
     p = argparse.ArgumentParser(description = "Cliente Upload (UDP, version mínima)")
-    p.add_argument("-v","--verbose", action="store_true")
+    
     p.add_argument("-H", "--host", required=True, help= "IP Del servidor")
     p.add_argument("-p", "--port", type=int, required=True, help="Puerto del servidor")
     p.add_argument("-s", "--src", required=True, help="Ruta del archivo local")
     p.add_argument("-n", "--name", required=True, help="Nombre destino en el servidor")
+    p.add_argument("-v","--verbose", action="store_true")
     p.add_argument("-r","--protocol", choices=["sw","sr"], default="sw", help="Protocolo de recuperación de errores (sw=Stop&Wait, sr=SelectiveRepeat)")
 
     return p.parse_args()
@@ -38,7 +39,7 @@ def main():
 
     with socket(AF_INET, SOCK_DGRAM) as clientsocket:
 
-        user_id,mtu = handshake_with_server(clientsocket, server, args.protocol, args.name)
+        user_id,mtu = handshake_with_server(clientsocket, server, args.protocol, args.src, args.name)
 
         max_packet_size = mtu - PACKET_HEADER_SIZE - 28  # 28 bytes para cabecera IP/UDP
     
