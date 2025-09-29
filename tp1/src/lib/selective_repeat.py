@@ -2,8 +2,8 @@ import socket
 import os
 import time
 
-from constants import WINDOW_SIZE, SEQUENCE_NUMBER_RANGE, MAX_PAYLOAD_SIZE
-from packet import Packet
+from ..constants import WINDOW_SIZE, SEQUENCE_NUMBER_RANGE, MAX_PAYLOAD_SIZE
+from ..packet import Packet
 
 MAX_RETRIES = 5  # Número máximo de reintentos para enviar un paquete
 RECV_TIMEOUT = 0.01 # para no bloquear en recvfrom
@@ -111,7 +111,7 @@ def download_selective_repeat(clientsocket, user_id, server, dest, max_packet_si
             received_seq = package.sequenceNumber
 
             #in seqNumber range (64)
-            if (current_base - WINDOWS_SIZE) <= received_seq and received_seq > current_base + WINDOWS_SIZE:
+            if (current_base - WINDOW_SIZE) <= received_seq and received_seq > current_base + WINDOW_SIZE:
 
                 selective_ack = Packet(
                     user_id, 
@@ -123,14 +123,14 @@ def download_selective_repeat(clientsocket, user_id, server, dest, max_packet_si
                 print(f"[ACTIVE] ACK de seqNum: {received_seq} fue enviado a {server}.")
                 
                 #Correctyl received: dentro de la ventana actual
-                if current_base <= received_seq and received_seq < current_base + WINDOWS_SIZE:
+                if current_base <= received_seq and received_seq < current_base + WINDOW_SIZE:
 
                     if received_seq not in buffer:
 
                         buffer[received_seq] = package
 
                     i = current_base
-                    limite = current_base + WINDOWS_SIZE
+                    limite = current_base + WINDOW_SIZE
                     while i < limite:
 
                         if i in buffer: 

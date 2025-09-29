@@ -34,7 +34,7 @@ class Packet:
         self.flags = flags & 0x1F  # Solo 5 bits usados (1 byte)
         self.sequenceNumber = sequenceNumber
         self.acknowledgmentNumber = acknowledgmentNumber
-        self.payload = payload.ljust(MAX_PAYLOAD_SIZE, b'\x00')
+        self.payload = payload.ljust(MAX_PAYLOAD_SIZE)
 
     @property
     def syn(self):

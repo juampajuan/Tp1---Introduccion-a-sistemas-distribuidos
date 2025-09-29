@@ -1,4 +1,4 @@
-from packet import Packet
+from ..packet import Packet
 
 TIMEOUT = 2  # Timeout en segundos
 MAX_RETRIES = 5  # Timeout en segundos
