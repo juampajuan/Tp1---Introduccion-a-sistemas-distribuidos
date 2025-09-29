@@ -11,7 +11,7 @@ def upload_stop_and_wait(clientsocket, user_id, server, src, max_packet_size, fr
     try:
         with open(src, "rb") as f:
             while True:
-                payload = f.read(max_packet_size)
+                payload = f.read(400)
                 is_last = (payload == b'')
                 flags = Packet.FLAG_FIN if is_last else Packet.FLAG_DATA
 
@@ -22,8 +22,10 @@ def upload_stop_and_wait(clientsocket, user_id, server, src, max_packet_size, fr
                         
                     clientsocket.sendto(packet.toBytes(), server)
                     try:
-                        data, _ = clientsocket.recvfrom(max_packet_size)
+                        data, _ = clientsocket.recvfrom(400)
                         ack = Packet.from_bytes(data)
+
+                        print(f"Recibi ack {ack.acknowledgmentNumber}")
 
                         if (ack.userId == user_id
                             and ack.ack
@@ -47,7 +49,7 @@ def upload_stop_and_wait(clientsocket, user_id, server, src, max_packet_size, fr
     print(f"Archivo enviado correctamente. Total de bytes enviados: {sent}")
 
 
-def download_stop_and_wait(clientsocket, user_id, server, dest, max_packet_size):
+def download_stop_and_wait(clientsocket, user_id, addr, dest, max_packet_size, from_server = False, user_session = None):
 
     seq = 0
     received_total = 0
@@ -56,8 +58,11 @@ def download_stop_and_wait(clientsocket, user_id, server, dest, max_packet_size)
 
         while True:
 
-            data, _ = clientsocket.recvfrom(max_packet_size)
-            package = Packet.from_bytes(data)
+            if from_server:
+                package = user_session.queue.get()
+            else:
+                data, _ = clientsocket.recvfrom(400)
+                package = Packet.from_bytes(data)
 
             print(
                 f"[ACTIVE] Recibido de userId {user_id}: "
@@ -71,22 +76,28 @@ def download_stop_and_wait(clientsocket, user_id, server, dest, max_packet_size)
                 acknowledgmentNumber=package.sequenceNumber
                 #acknowledgementNumber = package.sequenceNumber
                 )
-            clientsocket.sendto(ack.to_bytes(), server)
+            
+            if from_server:
+                user_session.sock.sendto(ack.to_bytes(), addr)
+            else:
+                clientsocket.sendto(ack.to_bytes(), addr)
+            
             print(
                 f"[ACTIVE] ACK enviado a userId {user_id}: "
                 f"{ack.to_string()}")
             
+            
             if package.sequenceNumber == seq:  
-                
-                #Añadir rstrip con tamaño de paquete real.
 
                 payload = package.payload
                 f.write(payload)
                 received_total+=len(payload)
 
                 seq ^= 1 
-            
+
             if package.fin:
-                print(f"[ACTIVE] Paquete final de parte de {server} recibido.")
+                print(f"[ACTIVE] Paquete final de parte de {addr} recibido.")
                 print(f"Cantidad total recibida: {received_total}.")
                 break 
+            
+            

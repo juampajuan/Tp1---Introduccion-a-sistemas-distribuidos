@@ -97,19 +97,15 @@ def validar_nombre(nombre):
     # 3) Si pasa todas las validaciones
     return VALIDACION_OK, "OK"
 
-def executing_protocol(protocol, user_session, user_id, archivo, max_packet_size):
+def executing_protocol(protocol, user_session, user_id, file_name, storage, max_packet_size):
     if protocol in ["sw", "dsw"]:
         print(f"[ACTIVE] Iniciando protocolo Stop and Wait para userId {user_id}")
         if protocol == "sw":
-            download_stop_and_wait(user_session, user_id, user_session.addr, archivo.name, max_packet_size, from_server = True)
+            download_stop_and_wait(None, user_id, user_session.addr, storage + "/" + file_name, max_packet_size, from_server = True, user_session = user_session)
         else:
-            upload_stop_and_wait(user_session, user_id, user_session.addr, archivo.name, max_packet_size, from_server= True)
+            upload_stop_and_wait(user_session, user_id, user_session.addr, file_name, max_packet_size)
     elif protocol in ["sr", "dsr"]:
         print(f"[ACTIVE] Iniciando protocolo Selective Repeat para userId {user_id}")
-        if protocol == "sr":
-            download_selective_repeat(user_session.sock, user_id, user_session.addr, archivo.name, max_packet_size)
-        else:
-            upload_selective_repeat(user_session.sock, user_id, user_session.addr, archivo.name, max_packet_size)
     else:
         print(f"Protocolo desconocido para userId {user_id}: {protocol}")
         return
@@ -117,6 +113,7 @@ def executing_protocol(protocol, user_session, user_id, archivo, max_packet_size
 
 
 def handleSession(user_session, packet_inicial, storage):
+
     """
     Handshake tipo TCP:
     - Espera un paquete con connect=1, syn=1, ack=0
@@ -154,6 +151,7 @@ def handleSession(user_session, packet_inicial, storage):
 
     while estado == Estado.SYNCING and loops < MAX_LOOPS:
         print(f"[HANDSHAKE] Iteración {loops+1} para userId {user_id}")
+        print(f"[DEBUGGIG] Manejo de sesion usuario {user_session.user_id} - estado {user_session.get_estado()}")
         loops += 1
         if packet is not None and packet.connect == 1:
             print(f"[HANDSHAKE] Procesando paquete de userId {user_id}: {packet.to_string()}")
@@ -176,7 +174,6 @@ def handleSession(user_session, packet_inicial, storage):
                     client_seq = packet.sequenceNumber
                     # Validar cliente y extraer campos
                     res_val = validar_pedido(packet)
-                    print("[DEBUGGING] hola como estas, pase por aca")
                     if res_val[0] == VALIDACION_OK:
                         #si es valido el modo de servicio
                         #queda validar nombe y path
@@ -252,7 +249,8 @@ def handleSession(user_session, packet_inicial, storage):
         return
     
     max_packet_size = int(client_mtu) - 28 - PACKET_HEADER_SIZE  # 28 bytes para cabecera IP/UDP
-    executing_protocol(res_val[1]["servicio"], user_session, user_id, archivo, max_packet_size)
+
+    executing_protocol(res_val[1]["servicio"], user_session, user_id, res_val[1]["nombre"] , storage, max_packet_size)
 
 
     print(f"Finalizando sesion para user: {user_id}, estado {user_session.get_estado()}")
