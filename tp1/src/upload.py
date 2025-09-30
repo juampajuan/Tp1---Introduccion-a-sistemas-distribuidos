@@ -41,7 +41,7 @@ def main():
 
     with socket(AF_INET, SOCK_DGRAM) as clientsocket:
 
-        user_id = handshake_with_server(clientsocket, server, args.protocol, args.src, args.name)
+        user_id = handshake_with_server(clientsocket, server, args.protocol, args.name)
 
         max_payload_size = PAYLOAD_SIZE #pasar a una constante
     

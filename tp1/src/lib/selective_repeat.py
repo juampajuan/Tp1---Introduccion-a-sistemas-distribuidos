@@ -62,7 +62,7 @@ def upload_selective_repeat(clientsocket, user_id, server, src, max_packet_size)
             while (not eof) and len(window) < WINDOW_SIZE and _in_window(
                 next_seq, window_base, WINDOW_SIZE, SEQUENCE_NUMBER_RANGE
             ):
-                payload = f.read(MAX_PAYLOAD_SIZE)
+                payload = f.read(PAYLOAD_SIZE)
                 is_last = (payload == b"")
                 flags = Packet.FLAG_FIN if is_last else Packet.FLAG_DATA
 

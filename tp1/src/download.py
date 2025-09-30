@@ -11,9 +11,9 @@ def parse_args():
     p.add_argument("-H", "--host", required=True, help= "IP Del servidor")
     p.add_argument("-p", "--port", type=int, required=True, help="Puerto del servidor")
     p.add_argument("-d", "--dst", required=True, help="Ruta del destino local")
-    p.add_argument("-n", "--name", required=True, help="Ruta del archivo remoto")
+    p.add_argument("-n", "--name", required=True, help="Nombre del archivo remoto")
     p.add_argument("-v","--verbose", action="store_true")
-    p.add_argument("-r","--protocol", choices=["dsw","dsr"], default="dsw", help="Protocolo de recuperación de errores (dsw=DownloadStop&Wait, dsr=DownloadSelectiveRepeat)")
+    p.add_argument("-r","--protocol", choices=["sw","sr"], default="sw", help="Protocolo de recuperación de errores (sw=DownloadStop&Wait, sr=DownloadSelectiveRepeat)")
 
     return p.parse_args()
 
@@ -26,7 +26,7 @@ def main():
 
         with socket(AF_INET, SOCK_DGRAM) as clientsocket:
 
-            user_id, mtu = handshake_with_server(clientsocket, server, args.protocol, "d" + args.dst, args.name)
+            user_id, mtu = handshake_with_server(clientsocket, server, "d" + args.protocol, args.name)
 
             max_packet_size = mtu - PACKET_HEADER_SIZE - 28 # 28 bytes para cabecera IP/UDP
 

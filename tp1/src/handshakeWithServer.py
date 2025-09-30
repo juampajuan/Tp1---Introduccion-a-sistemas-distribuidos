@@ -17,7 +17,7 @@ def separar_ruta(ruta):
     return path, filename
 
 
-def handshake_with_server(clientsocket, server, servicio, path_para_server, nombre_archivo_server):
+def handshake_with_server(clientsocket, server, servicio, nombre_archivo_server):
 
     clientsocket.settimeout(TIMEOUT)  # Timeout de 5 segundos
     
