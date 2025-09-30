@@ -6,7 +6,7 @@ from handshakeWithServer import handshake_with_server
 from lib.selective_repeat import upload_selective_repeat
 from lib.stop_and_wait import upload_stop_and_wait
 from socket import *
-from lib.constants import MAX_PAYLOAD_SIZE, WINDOW_SIZE, SEQUENCE_NUMBER_RANGE,PACKET_HEADER_SIZE
+from lib.constants import PAYLOAD_SIZE, WINDOW_SIZE, SEQUENCE_NUMBER_RANGE,PACKET_HEADER_SIZE
 from lib.packet import Packet
 
 #constantes
@@ -30,8 +30,10 @@ def parse_args():
 def main():
     args = parse_args()
 
+    filenameWithPath = args.src + args.name
+
     # Valido archivo
-    if not os.path.isfile(args.src):
+    if not os.path.isfile(filenameWithPath):
         print("El archivo no existe")
         return
 
@@ -39,14 +41,14 @@ def main():
 
     with socket(AF_INET, SOCK_DGRAM) as clientsocket:
 
-        user_id,mtu = handshake_with_server(clientsocket, server, args.protocol, args.src, args.name)
+        user_id = handshake_with_server(clientsocket, server, args.protocol, args.src, args.name)
 
-        max_packet_size = mtu - PACKET_HEADER_SIZE - 28  # 28 bytes para cabecera IP/UDP
+        max_payload_size = PAYLOAD_SIZE #pasar a una constante
     
         protocolos = { "sw": upload_stop_and_wait, "sr": upload_selective_repeat}
 
         if args.protocol in protocolos:
-            protocolos[args.protocol](clientsocket, user_id, server, args.src, max_packet_size)
+            protocolos[args.protocol](clientsocket, user_id, server, filenameWithPath, max_payload_size)
         else:
                 print("Protocolo desconocido")
     

@@ -1,5 +1,6 @@
-from lib.constants import PACKET_HEADER_SIZE, MAX_PAYLOAD_SIZE
+from lib.constants import PACKET_HEADER_SIZE
 from lib.packet import Packet
+from lib.constants import PAYLOAD_SIZE
 
 USERID_INICIAL = 65535  # User ID inicial para la handshake
 TIMEOUT = 5
@@ -25,24 +26,30 @@ def handshake_with_server(clientsocket, server, servicio, path_para_server, nomb
     while True:
          
         try:
-            payload_peticion = f"servicio|{servicio}\npath|{path_para_server}\nnombre|{nombre_archivo_server}\nMTU|700".encode("utf-8")
+            payload_peticion = f"servicio|{servicio}\nnombre|{nombre_archivo_server}".encode("utf-8")
             out_packet = Packet(USERID_INICIAL, payload=payload_peticion, flags=Packet.FLAG_CONNECT | Packet.FLAG_SYN)
             clientsocket.sendto(out_packet.toBytes(), server)
 
             # Recibo el user_id asignado por el server
-            data, _ = clientsocket.recvfrom(PACKET_HEADER_SIZE+MAX_PAYLOAD_SIZE) 
+            data, _ = clientsocket.recvfrom(PACKET_HEADER_SIZE + PAYLOAD_SIZE)
             in_packet = Packet.from_bytes(data)
             user_id = in_packet.userId
             print(f"User ID asignado por el servidor: {user_id}\n")
 
-            mtu = recibir_detalles_conexion(in_packet.payload.decode("utf-8"))
-
-            if mtu:
-                
-                ack = Packet(user_id,flags=Packet.FLAG_CONNECT | Packet.FLAG_ACK)
+            conexion_ok = recibir_detalles_conexion(in_packet.payload.decode("utf-8"))
+            if conexion_ok:
+                ack = Packet(user_id, flags=Packet.FLAG_CONNECT | Packet.FLAG_ACK)
                 clientsocket.sendto(ack.to_bytes(), server)
-
-                return user_id, mtu
+                return user_id
+            #comentado porque mtu ya no se usa
+            # mtu = recibir_detalles_conexion(in_packet.payload.decode("utf-8"))
+            #
+            # if mtu:
+            #
+            #     ack = Packet(user_id,flags=Packet.FLAG_CONNECT | Packet.FLAG_ACK)
+            #     clientsocket.sendto(ack.to_bytes(), server)
+            #
+            #     return user_id, mtu
         
         except Exception as e:
             print(f"Error durante el handshake con el servidor: {e}. Proceso abortado.")
@@ -58,15 +65,19 @@ def recibir_detalles_conexion(payload):
         mensaje = payload_filtrado.split(":", 1)[1].strip()
         print(f"Error: {mensaje}")
         exit(1)
+    #edito esta linea porque ya no viene el mtu en el payload, solo ok o error
+    #elif len(payload_separado) == 2 and payload_separado[0] == "OK":
+    elif payload_separado[0] == "OK":
+        print("Handshake completado exitosamente.")
+        return True
 
-    elif len(payload_separado) == 2 and payload_separado[0] == "OK":
-
-        if payload_separado[1].startswith("MTU="):
-            mtu_str = payload_separado[1].split("=")[1].replace('\x00', '').strip()
-            mtu = int(mtu_str)
-            print(f"Mtu retornado: {mtu}.")
-
-            return mtu     
+        #ya no se usa mtu
+        # if payload_separado[1].startswith("MTU="):
+        #     mtu_str = payload_separado[1].split("=")[1].replace('\x00', '').strip()
+        #     mtu = int(mtu_str)
+        #     print(f"Mtu retornado: {mtu}.")
+        #
+        #     return mtu
 
     print("Formato de respuesta del server invalido, esperando nuevo mensaje")
-    return
+    return False

@@ -3,14 +3,12 @@ import os
 import threading
 
 from lib.constants import ERROR_FALTA_CAMPO,ERROR_SERVICIO_INVALIDO, ERROR_PATH_INCORRECTO, ERROR_NOMBRE_INVALIDO,VALIDACION_OK,NOMBRES_RESERVADOS,CARACTERES_NO_PERMITIDOS
-from lib.constants import SERVER_MTU, PACKET_HEADER_SIZE
 from lib.stop_and_wait import upload_stop_and_wait, download_stop_and_wait
-from lib.selective_repeat import upload_selective_repeat, download_selective_repeat
 from lib.packet import Packet
+from lib.constants import MAX_UDP_PAYLOAD_LENGTH, PAYLOAD_SIZE
 from user_session import UserSession
 from queue import Empty
 
-MAX_PACKET_SIZE = 400
 MAX_CANT_REVISADOS = 4
 USER_ID_NUEVO = 65535
 TIMEOUT = 1  # 1 segundo
@@ -28,6 +26,7 @@ def generar_user_id():
         if user_id_counter >= USER_ID_NUEVO:
             user_id_counter = 1  # Reiniciar si se llega al máximo permitido
         return user_id
+
 
 
 def abrir_archivo_usuario(storage, user_id):
@@ -66,24 +65,17 @@ def validar_pedido(packet):
         if '|' in field:
             key, value = field.split('|', 1)
             valores[key] = value
-    # Validar presencia de los cuatro campos
-    for campo in ["servicio", "path", "nombre", "MTU"]:
+    # Validar presencia de los 2 campos
+    for campo in ["servicio", "nombre"]:
         if campo not in valores or not valores[campo]:
             return (ERROR_FALTA_CAMPO, f"ERROR: Falta el campo {campo} en el pedido de conexion")
     # Validar servicio
     servicio_valido = valores["servicio"] in ["sw", "sr", "dsw", "dsr"]
     if not servicio_valido:
-        return (ERROR_SERVICIO_INVALIDO, f"ERROR: servicio {valores['servicio']} no valido")
-    # Validar MTU mayor a 50
-    try:
-        mtu_val = int(valores["MTU"])
-        if mtu_val <= 50:
-            return (5, f"ERROR: MTU {mtu_val} no válido, debe ser mayor a 50")
-    except ValueError:
-        return (5, f"ERROR: MTU {valores['MTU']} no es un número válido")
+        return ERROR_SERVICIO_INVALIDO, f"ERROR: servicio {valores['servicio']} no valido"
     # Si el pedido es correcto
-    print(f"[ACTIVE] servicio: {valores['servicio']}, path: {valores['path']}, nombre: {valores['nombre']}, MTU: {valores['MTU']}")
-    return (VALIDACION_OK, valores)
+    print(f"[ACTIVE] servicio: {valores['servicio']}, nombre: {valores['nombre']}")
+    return VALIDACION_OK, valores
 
 
 def validar_nombre(nombre):
@@ -97,13 +89,13 @@ def validar_nombre(nombre):
     # 3) Si pasa todas las validaciones
     return VALIDACION_OK, "OK"
 
-def executing_protocol(protocol, user_session, user_id, file_name, storage, max_packet_size):
+def executing_protocol(protocol, user_session, user_id, file_name, storage, max_payload_size):
     if protocol in ["sw", "dsw"]:
         print(f"[ACTIVE] Iniciando protocolo Stop and Wait para userId {user_id}")
         if protocol == "sw":
-            download_stop_and_wait(None, user_id, user_session.addr, storage + "/" + file_name, max_packet_size, from_server = True, user_session = user_session)
+            download_stop_and_wait(None, user_id, user_session.addr, storage + "/" + file_name, max_payload_size, from_server = True, user_session = user_session)
         else:
-            upload_stop_and_wait(user_session, user_id, user_session.addr, file_name, max_packet_size)
+            upload_stop_and_wait(user_session, user_id, user_session.addr, file_name, max_payload_size)
     elif protocol in ["sr", "dsr"]:
         print(f"[ACTIVE] Iniciando protocolo Selective Repeat para userId {user_id}")
     else:
@@ -112,7 +104,7 @@ def executing_protocol(protocol, user_session, user_id, file_name, storage, max_
 
 
 
-def handleSession(user_session, packet_inicial, storage):
+def handle_session(user_session, packet_inicial, storage):
 
     """
     Handshake tipo TCP:
@@ -134,13 +126,12 @@ def handleSession(user_session, packet_inicial, storage):
     estado = user_session.get_estado()
     user_id = user_session.user_id
     packet = packet_inicial
-    ruta=""
     nombre=""
     print(f"[HANDSHAKE] Packet inicial recibido: {packet.to_string()}")
 
     # Inicializar sequenceNumber del servidor para la sesión
     server_seq = 0
-    client_seq = packet.sequenceNumber
+    client_seq = packet.sequence_number
     client_mtu = 0
     # Buffer de 5MB para almacenar payloads
     BUFFER_SIZE = 5 * 1024 * 1024  # 5MB
@@ -171,28 +162,26 @@ def handleSession(user_session, packet_inicial, storage):
             else:
                 if packet.syn == 1 and packet.ack == 0:
                     # Primer SYN del cliente
-                    client_seq = packet.sequenceNumber
+                    client_seq = packet.sequence_number
                     # Validar cliente y extraer campos
                     res_val = validar_pedido(packet)
                     if res_val[0] == VALIDACION_OK:
                         #si es valido el modo de servicio
-                        #queda validar nombe y path
-                        ruta = res_val[1]["path"]
+                        #queda validar nombre de archivo
                         nombre = res_val[1]["nombre"]
-                        client_mtu = res_val[1]["MTU"]
                         res_nombre = validar_nombre(nombre)
                         if res_nombre [0] == VALIDACION_OK:
                             #la solicitud es correcta envio sin + ack y OK
-                            print(f"Pedido válido de userId {user_id}: servicio {res_val[1]}, path {ruta}, nombre {nombre}")
-                            payload = f"OK\nMTU={SERVER_MTU}".encode('utf-8')
+                            print(f"Pedido válido de userId {user_id}: servicio {res_val[1]} nombre {nombre}")
+                            payload = f"OK".encode('utf-8')
                             response = Packet(
                                 user_id,
-                                payload,
+                                payload=payload,
                                 flags= (Packet.FLAG_CONNECT |
                                         Packet.FLAG_SYN |
                                         Packet.FLAG_ACK),
-                                sequenceNumber=server_seq,
-                                acknowledgmentNumber=client_seq + len(payload.rstrip(b'\x00'))
+                                sequence_number=server_seq,
+                                acknowledgment_number=client_seq + 1
                                 )
                             print(
                                 f"Enviando SYNACK+OK al usuario {user_id} "
@@ -200,18 +189,18 @@ def handleSession(user_session, packet_inicial, storage):
                             user_session.sock.sendto(response.toBytes(), user_session.addr)
                             waiting_sinack = True
                         else:
-                            #hay un error en el nombre o el path envion sin+ack+error
+                            #hay un error en el nombre envio sin+ack+error
                             error_handshake = True
-                            print(f"Error en el nombre o path del archivo para userId {user_id}: {res_nombre[1]}")
+                            print(f"Error en el nombre del archivo para userId {user_id}: {res_nombre[1]}")
                             payload = res_nombre[1].encode('utf-8')
                             response = Packet(
                                 user_id,
-                                payload,
+                                payload=payload,
                                 flags= (Packet.FLAG_CONNECT |
                                         Packet.FLAG_SYN |
                                         Packet.FLAG_ACK),
-                                sequenceNumber=server_seq,
-                                acknowledgmentNumber=client_seq + len(payload.rstrip(b'\x00'))
+                                sequence_number=server_seq,
+                                acknowledgment_number=client_seq + 1
                                 )
                             print(
                                 f"Enviando SYNACK+ERROR al usuario {user_id} "
@@ -225,12 +214,12 @@ def handleSession(user_session, packet_inicial, storage):
                         payload = res_val[1].encode('utf-8')
                         response = Packet(
                             user_id,
-                            payload,
+                            payload=payload,
                             flags= (Packet.FLAG_CONNECT |
                                     Packet.FLAG_SYN |
                                     Packet.FLAG_ACK),
-                            sequenceNumber=server_seq,
-                            acknowledgmentNumber=client_seq + len(payload.rstrip(b'\x00'))
+                            sequence_number=server_seq,
+                            acknowledgment_number=client_seq + len(payload.rstrip(b'\x00'))
                             )
                         print(
                             f"Enviando SYNACK+ERROR al usuario {user_id} "
@@ -247,10 +236,8 @@ def handleSession(user_session, packet_inicial, storage):
     if (user_session.get_estado() == Estado.SYNCING) or error_handshake:
         print(f"Fallo el handshake para el usuario {user_id}")
         return
-    
-    max_packet_size = int(client_mtu) - 28 - PACKET_HEADER_SIZE  # 28 bytes para cabecera IP/UDP
 
-    executing_protocol(res_val[1]["servicio"], user_session, user_id, res_val[1]["nombre"] , storage, max_packet_size)
+    executing_protocol(res_val[1]["servicio"], user_session, user_id, res_val[1]["nombre"], storage, PAYLOAD_SIZE)
 
 
     print(f"Finalizando sesion para user: {user_id}, estado {user_session.get_estado()}")
@@ -279,7 +266,7 @@ def start(host, port, storage):
     server_sessions = {}
     try:
         while True:
-            data, addr = sock.recvfrom(MAX_PACKET_SIZE)
+            data, addr = sock.recvfrom(MAX_UDP_PAYLOAD_LENGTH)
             try:
                 packet = Packet.from_bytes(data)
                 user_id = packet.userId
@@ -290,7 +277,7 @@ def start(host, port, storage):
                 nuevo_id = generar_user_id()
                 user_session = UserSession(nuevo_id, addr, sock)
                 server_sessions[nuevo_id] = user_session
-                t = threading.Thread(target=handleSession,
+                t = threading.Thread(target=handle_session,
                                      args=(user_session, packet, storage),
                                      daemon=True)
                 t.start()

@@ -2,7 +2,7 @@ import socket
 import os
 import time
 
-from .constants import WINDOW_SIZE, SEQUENCE_NUMBER_RANGE, MAX_PAYLOAD_SIZE
+from .constants import WINDOW_SIZE, SEQUENCE_NUMBER_RANGE, PAYLOAD_SIZE
 from .packet import Packet
 
 MAX_RETRIES = 5  # Número máximo de reintentos para enviar un paquete
@@ -67,7 +67,7 @@ def upload_selective_repeat(clientsocket, user_id, server, src, max_packet_size)
                 flags = Packet.FLAG_FIN if is_last else Packet.FLAG_DATA
 
                 pkt = Packet(user_id, b"" if is_last else payload,
-                             flags=flags, sequenceNumber=next_seq)
+                             flags=flags, sequence_number=next_seq)
 
                 clientsocket.sendto(pkt.toBytes(), server)
                 window[next_seq] = {"pkt": pkt, "sent_at": time.time(), "retries": 0}
@@ -116,8 +116,8 @@ def download_selective_repeat(clientsocket, user_id, server, dest, max_packet_si
                 selective_ack = Packet(
                     user_id, 
                     flags=Packet.FLAG_ACK,
-                    sequenceNumber=received_seq,
-                    acknowledgmentNumber=received_seq
+                    sequence_number=received_seq,
+                    acknowledgment_number=received_seq
                 )
                 clientsocket.sendto(selective_ack.to_bytes(), server)
                 print(f"[ACTIVE] ACK de seqNum: {received_seq} fue enviado a {server}.")
