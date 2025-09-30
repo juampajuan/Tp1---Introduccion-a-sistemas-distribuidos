@@ -9,9 +9,9 @@ from lib.constants import MAX_UDP_PAYLOAD_LENGTH, PAYLOAD_SIZE
 from user_session import UserSession
 from queue import Empty
 
-MAX_CANT_REVISADOS = 4
+MAX_CANT_REVISADOS = 10
 USER_ID_NUEVO = 65535
-TIMEOUT = 1  # 1 segundo
+TIMEOUT = 1/1000  # 1 segundo
 
 
 user_id_counter = 1  # Comenzar en 1 para evitar colisión con 65535
@@ -116,8 +116,8 @@ def handle_session(user_session, packet_inicial, storage):
     Luego, si el estado es ACTIVE, recibe mensajes y responde con ACK.
     """
     from user_session import Estado
-    TIMEOUT = 1  # 1 segundo
-    MAX_LOOPS = 4
+    TIMEOUT = 1/1000  # 1 segundo
+    MAX_LOOPS = 10
 
     res_packet = None
     payload =""

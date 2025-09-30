@@ -1,8 +1,9 @@
 from .constants import PACKET_HEADER_SIZE
 from .packet import Packet
+import socket
 
-TIMEOUT = 2  # Timeout en segundos
-MAX_RETRIES = 5  # Timeout en segundos
+TIMEOUT = 2 /1000  # Timeout en segundos
+MAX_RETRIES = 20  # Timeout en segundos
 
 def upload_stop_and_wait(clientsocket, user_id, server, src, max_payload_size, from_server = False, user_session = None):
 
@@ -30,7 +31,7 @@ def upload_stop_and_wait(clientsocket, user_id, server, src, max_payload_size, f
                     clientsocket.sendto(packet.toBytes(), server)
                     try:   
                         if from_server:
-                            ack = user_session.queue.get()
+                            ack = user_session.queue.get(TIMEOUT)
                         else:
                             data, _ = clientsocket.recvfrom(max_payload_size)
                             ack = Packet.from_bytes(data)
@@ -41,7 +42,7 @@ def upload_stop_and_wait(clientsocket, user_id, server, src, max_payload_size, f
                             and ack.ack
                             and ack.acknowledgment_number == seq):
                             break  # ACK correcto para este seq
-                    except clientsocket.timeout:
+                    except socket.timeout:
                         pass
 
                     retries += 1
@@ -50,6 +51,7 @@ def upload_stop_and_wait(clientsocket, user_id, server, src, max_payload_size, f
                         return
 
                 if is_last:
+                    sent += len(payload) + PACKET_HEADER_SIZE
                     break
 
                 sent += len(payload) + PACKET_HEADER_SIZE
@@ -69,7 +71,7 @@ def download_stop_and_wait(clientsocket, user_id, addr, dest, max_payload_size, 
         while True:
 
             if from_server:
-                package = user_session.queue.get()
+                package = user_session.queue.get(TIMEOUT)
             else:
                 data, _ = clientsocket.recvfrom(PACKET_HEADER_SIZE+max_payload_size)
                 package = Packet.from_bytes(data)
@@ -110,7 +112,7 @@ def download_stop_and_wait(clientsocket, user_id, addr, dest, max_payload_size, 
                 # except Exception:
                 #     print(f"Payload recibido binario:\n{payload}\n")
                 f.write(payload)
-                received_total+=len(payload)
+                received_total+=len(payload)+ PACKET_HEADER_SIZE
 
                 seq ^= 1 
 
