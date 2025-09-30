@@ -4,6 +4,7 @@ import threading
 
 from lib.constants import ERROR_FALTA_CAMPO,ERROR_SERVICIO_INVALIDO, ERROR_PATH_INCORRECTO, ERROR_NOMBRE_INVALIDO,VALIDACION_OK,NOMBRES_RESERVADOS,CARACTERES_NO_PERMITIDOS
 from lib.stop_and_wait import upload_stop_and_wait, download_stop_and_wait
+from lib.selective_repeat import upload_selective_repeat, download_selective_repeat
 from lib.packet import Packet
 from lib.constants import MAX_UDP_PAYLOAD_LENGTH, PAYLOAD_SIZE
 from user_session import UserSession
@@ -97,7 +98,11 @@ def executing_protocol(protocol, user_session, user_id, file_name, storage, max_
         else:
             upload_stop_and_wait(user_session.sock, user_id, user_session.addr, storage + "/" + file_name, max_payload_size, from_server = True, user_session = user_session)
     elif protocol in ["sr", "dsr"]:
-        print(f"[ACTIVE] Iniciando protocolo Selective Repeat para userId {user_id}")
+        if protocol == "sr":
+            download_selective_repeat(None, user_id, user_session.addr, storage + "/" + file_name, max_payload_size, from_server = True, user_session = user_session)
+        else:
+            upload_selective_repeat(user_session.sock, user_id, user_session.addr, storage + "/" + file_name, max_payload_size, from_server = True, user_session = user_session)
+
     else:
         print(f"Protocolo desconocido para userId {user_id}: {protocol}")
         return
