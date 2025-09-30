@@ -15,7 +15,7 @@ def main():
                         help='decrease output verbosity')
     parser.add_argument('-H', '--host', type=str, metavar='ADDR',
                         help='service IP address')
-    parser.add_argument('-P', '--port', type=int, metavar='PORT',
+    parser.add_argument('-p', '--port', type=int, metavar='PORT',
                         help='service port')
     parser.add_argument('-s', '--storage', type=str, metavar='DIRPATH',
                         help='storage dir path')

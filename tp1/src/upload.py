@@ -30,7 +30,7 @@ def parse_args():
 def main():
     args = parse_args()
 
-    filenameWithPath = args.src + args.name
+    filenameWithPath = args.src 
 
     # Valido archivo
     if not os.path.isfile(filenameWithPath):

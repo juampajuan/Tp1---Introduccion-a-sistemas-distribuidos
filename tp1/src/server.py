@@ -95,7 +95,7 @@ def executing_protocol(protocol, user_session, user_id, file_name, storage, max_
         if protocol == "sw":
             download_stop_and_wait(None, user_id, user_session.addr, storage + "/" + file_name, max_payload_size, from_server = True, user_session = user_session)
         else:
-            upload_stop_and_wait(user_session, user_id, user_session.addr, file_name, max_payload_size)
+            upload_stop_and_wait(user_session.sock, user_id, user_session.addr, storage + "/" + file_name, max_payload_size, from_server = True, user_session = user_session)
     elif protocol in ["sr", "dsr"]:
         print(f"[ACTIVE] Iniciando protocolo Selective Repeat para userId {user_id}")
     else:

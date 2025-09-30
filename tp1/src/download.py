@@ -3,7 +3,7 @@ import argparse
 from handshakeWithServer import handshake_with_server
 from lib.stop_and_wait import download_stop_and_wait
 from lib.selective_repeat import download_selective_repeat
-from lib.constants import PACKET_HEADER_SIZE
+from lib.constants import PACKET_HEADER_SIZE, PAYLOAD_SIZE
 
 
 def parse_args():
@@ -26,9 +26,9 @@ def main():
 
         with socket(AF_INET, SOCK_DGRAM) as clientsocket:
 
-            user_id, mtu = handshake_with_server(clientsocket, server, "d" + args.protocol, args.name)
+            user_id = handshake_with_server(clientsocket, server, "d" + args.protocol, args.name)
 
-            max_packet_size = mtu - PACKET_HEADER_SIZE - 28 # 28 bytes para cabecera IP/UDP
+            max_packet_size = PAYLOAD_SIZE
 
             if args.protocol == "sw" :
                 download_stop_and_wait(clientsocket, user_id, server, args.dst, max_packet_size)

@@ -28,9 +28,12 @@ def upload_stop_and_wait(clientsocket, user_id, server, src, max_payload_size, f
                 while True:
 
                     clientsocket.sendto(packet.toBytes(), server)
-                    try:
-                        data, _ = clientsocket.recvfrom(max_payload_size)
-                        ack = Packet.from_bytes(data)
+                    try:   
+                        if from_server:
+                            ack = user_session.queue.get()
+                        else:
+                            data, _ = clientsocket.recvfrom(max_payload_size)
+                            ack = Packet.from_bytes(data)
 
                         print(f"Recibi ack {ack.acknowledgment_number}")
 
