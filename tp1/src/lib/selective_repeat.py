@@ -18,7 +18,8 @@ def _next_seq(x, modulo):
 
 def upload_selective_repeat(clientsocket, user_id, server, src, max_payload_size, from_server = False, user_session = None):
     # 1) poll cortito para no bloquear (no es el timeout de retransmisión)
-    clientsocket.settimeout(RECV_TIMEOUT)
+    if not from_server:
+        clientsocket.settimeout(RECV_TIMEOUT)
 
     print("Empieza uplaod server")
     window = {}          # seq -> {"pkt": Packet, "sent_at": float, "retries": int}
@@ -41,7 +42,11 @@ def upload_selective_repeat(clientsocket, user_id, server, src, max_payload_size
                 while True:
                     print(f"Iteracion del while dentro del try para recibir acks nro: {j}")
                     if from_server:
-                        ack = user_session.queue.get(TIMEOUT)
+                        if not user_session.queue.empty():
+                            print("Cola no vacia")
+                            ack = user_session.queue.get()
+                        else:
+                            break
                     else:
                         data, _ = clientsocket.recvfrom(max_payload_size)
                         ack = Packet.from_bytes(data)
