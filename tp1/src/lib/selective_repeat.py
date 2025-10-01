@@ -44,7 +44,7 @@ def upload_selective_repeat(clientsocket, user_id, server, src, max_payload_size
                 while True:
                     print(f"Iteracion del while dentro del try para recibir acks nro: {j}")
                     if from_server:
-                        if not user_session.queue.empty(timeout_client_upload_sr):
+                        if not user_session.queue.empty():
                             print("Cola no vacia")
                             ack = user_session.queue.get()
                         else:
