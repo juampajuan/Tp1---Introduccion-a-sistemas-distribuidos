@@ -9,6 +9,8 @@ TIMEOUT = 2 /1000  # Timeout en segundos
 MAX_RETRIES = 5  # Número máximo de reintentos para enviar un paquete
 RECV_TIMEOUT = 0.01 # para no bloquear en recvfrom
 TIMEOUT_RTX = 0.8 # Timeout para retransmisión en Selective Repeat
+timeout_server_dsr = 2 # Timeout en segundos
+timeout_client_upload_sr = 1.2 # Timeout en segundos
 
 def _in_window(seq, base, size, modulo):
     return ((seq - base) % modulo) < size
@@ -42,7 +44,7 @@ def upload_selective_repeat(clientsocket, user_id, server, src, max_payload_size
                 while True:
                     print(f"Iteracion del while dentro del try para recibir acks nro: {j}")
                     if from_server:
-                        if not user_session.queue.empty():
+                        if not user_session.queue.empty(timeout_client_upload_sr):
                             print("Cola no vacia")
                             ack = user_session.queue.get()
                         else:
@@ -126,7 +128,7 @@ def download_selective_repeat(clientsocket, user_id, server, dest, max_payload_s
 
         while True:
             if from_server:
-                package = user_session.queue.get(TIMEOUT)
+                package = user_session.queue.get(timeout_server_dsr)
             else:
                 data, _ = clientsocket.recvfrom(PACKET_HEADER_SIZE+max_payload_size)
                 package = Packet.from_bytes(data)

@@ -12,7 +12,7 @@ from queue import Empty
 
 MAX_CANT_REVISADOS = 10
 USER_ID_NUEVO = 65535
-TIMEOUT = 1/1000  # 1 segundo
+TIMEOUT = 1500/1000  # 1.5 segundos
 
 
 user_id_counter = 1  # Comenzar en 1 para evitar colisión con 65535
@@ -121,28 +121,18 @@ def handle_session(user_session, packet_inicial, storage):
     Luego, si el estado es ACTIVE, recibe mensajes y responde con ACK.
     """
     from user_session import Estado
-    TIMEOUT = 1/1000  # 1 segundo
+    timeout_handshake = 500/1000  # 0.5 segundos
     MAX_LOOPS = 10
-
-    res_packet = None
-    payload =""
     loops = 0
     waiting_sinack = False
     estado = user_session.get_estado()
     user_id = user_session.user_id
     packet = packet_inicial
-    nombre=""
     print(f"[HANDSHAKE] Packet inicial recibido: {packet.to_string()}")
 
     # Inicializar sequenceNumber del servidor para la sesión
     server_seq = 0
     client_seq = packet.sequence_number
-    client_mtu = 0
-    # Buffer de 5MB para almacenar payloads
-    BUFFER_SIZE = 5 * 1024 * 1024  # 5MB
-    buffer = bytearray(BUFFER_SIZE)
-    buffer_offset = 0
-    archivo = None  # Solo abrir después del handshake
     error_handshake = False
 
     while estado == Estado.SYNCING and loops < MAX_LOOPS:
@@ -233,7 +223,7 @@ def handle_session(user_session, packet_inicial, storage):
                         waiting_sinack = True
         try:
             print(f"[HANDSHAKE] Esperando paquete de userId {user_id}...")
-            packet = user_session.queue.get(timeout=TIMEOUT)
+            packet = user_session.queue.get(timeout_handshake)
         except Empty:
             print(f"[HANDSHAKE] Timeout esperando paquete de userId {user_id}")
             packet = None
