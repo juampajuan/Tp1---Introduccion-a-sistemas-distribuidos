@@ -252,6 +252,7 @@ def start(host, port, storage):
         return
     # Crear y enlazar el socket UDP
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.settimeout(None)
     try:
         sock.bind((host, port))
     except Exception as e:
@@ -261,7 +262,11 @@ def start(host, port, storage):
     server_sessions = {}
     try:
         while True:
-            data, addr = sock.recvfrom(MAX_UDP_PAYLOAD_LENGTH)
+            try:
+                data, addr = sock.recvfrom(MAX_UDP_PAYLOAD_LENGTH)
+            except socket.timeout:
+                continue
+            
             try:
                 packet = Packet.from_bytes(data)
                 user_id = packet.userId
@@ -279,8 +284,8 @@ def start(host, port, storage):
             elif user_id in server_sessions:
                 user_session = server_sessions[user_id]
                 user_session.queue.put(packet)
-                print(f"Paquete encolado para user_id {user_id}")
-                print(f"Paquete encolado: {packet.to_string()}")
+                # print(f"Paquete encolado para user_id {user_id}")
+                # print(f"Paquete encolado: {packet.to_string()}")
             else:
                 print(
                     f"Paquete descartado: user_id {user_id} "

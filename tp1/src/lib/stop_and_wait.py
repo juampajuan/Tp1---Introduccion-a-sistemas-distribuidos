@@ -3,10 +3,11 @@ from .packet import Packet
 from .tools import format_time
 import socket
 import time
+import queue
 TIMEOUT = 2 /1000  # Timeout en segundos
-MAX_RETRIES = 20  # Timeout en segundos
-timeout_server_dsw = 1.5 # Timeout en segundos
-timeout_client_upload_sw = 1.2 # Timeout en segundos
+MAX_RETRIES = 30  # Timeout en segundos
+timeout_server_dsw = 0.1 # Timeout en segundos
+timeout_client_upload_sw = 0.1 # Timeout en segundos
 
 
 def upload_stop_and_wait(clientsocket, user_id, server, src, max_payload_size, from_server = False, user_session = None):
@@ -21,13 +22,8 @@ def upload_stop_and_wait(clientsocket, user_id, server, src, max_payload_size, f
                 payload = f.read(max_payload_size)
                 is_last = (payload == b'')
                 flags = Packet.FLAG_FIN if is_last else Packet.FLAG_DATA
-                print(f"Longitud del payload: {len(payload)}")
-                # Mostrar el payload con saltos de línea si es texto
-                # try:
-                #     payload_str = payload.decode('utf-8')
-                #     print(f"Payload a enviar:\n{payload_str}\n")
-                # except Exception:
-                #     print(f"Payload a enviar (binario):\n{payload}\n")
+                #print(f"Longitud del payload: {len(payload)}")
+
                 packet = Packet(user_id, payload, flags=flags, sequence_number=seq)
 
                 retries = 0
@@ -36,7 +32,7 @@ def upload_stop_and_wait(clientsocket, user_id, server, src, max_payload_size, f
                     clientsocket.sendto(packet.toBytes(), server)
                     try:   
                         if from_server:
-                            ack = user_session.queue.get(timeout_client_upload_sw)
+                            ack = user_session.queue.get(timeout=timeout_client_upload_sw)
                         else:
                             data, _ = clientsocket.recvfrom(max_payload_size)
                             ack = Packet.from_bytes(data)
@@ -47,7 +43,7 @@ def upload_stop_and_wait(clientsocket, user_id, server, src, max_payload_size, f
                             and ack.ack
                             and ack.acknowledgment_number == seq):
                             break  # ACK correcto para este seq
-                    except socket.timeout:
+                    except (socket.timeout, queue.Empty):
                         pass
 
                     retries += 1
@@ -70,61 +66,49 @@ def upload_stop_and_wait(clientsocket, user_id, server, src, max_payload_size, f
 
 
 
-def download_stop_and_wait(clientsocket, user_id, addr, dest, max_payload_size, from_server = False, user_session = None):
-
+def download_stop_and_wait(clientsocket, user_id, addr, dest, max_payload_size, from_server=False, user_session=None):
     seq = 0
     received_total = 0
 
     with open(dest, "wb") as f:
         ini = time.perf_counter()
         while True:
-
+            # Recibir paquete (cola si corre en el server)
             if from_server:
-                package = user_session.queue.get(timeout_server_dsw)
+                try:
+                    package = user_session.queue.get(timeout=timeout_server_dsw)
+                except queue.Empty:
+                    # No llegó a tiempo (delay/pérdida); seguir esperando
+                    continue
             else:
-                data, _ = clientsocket.recvfrom(PACKET_HEADER_SIZE+max_payload_size)
+                data, _ = clientsocket.recvfrom(PACKET_HEADER_SIZE + max_payload_size)
                 package = Packet.from_bytes(data)
 
+            print(f"[ACTIVE] Recibido de userId {user_id}: {package.to_string()}")
 
-            print(
-                f"[ACTIVE] Recibido de userId {user_id}: "
-                f"{package.to_string()}"
-            )
-
+            # Enviar ACK eco del seq recibido (siempre ACKear)
             ack = Packet(
                 user_id,
-                flags=(Packet.FLAG_ACK),
+                flags=Packet.FLAG_ACK,
                 sequence_number=package.sequence_number,
                 acknowledgment_number=package.sequence_number
-                #acknowledgementNumber = package.sequenceNumber
-                )
-            
+            )
             if from_server:
                 user_session.sock.sendto(ack.to_bytes(), addr)
             else:
                 clientsocket.sendto(ack.to_bytes(), addr)
-            
-            print(
-                f"[ACTIVE] ACK enviado a userId {user_id}: "
-                f"{ack.to_string()}")
-            
-            
-            if package.sequence_number == seq:
 
+            print(f"[ACTIVE] ACK enviado a userId {user_id}: {ack.to_string()}")
+
+            # Consumir DATA sólo si es el seq esperado; luego alternar
+            if package.data and package.sequence_number == seq:
                 payload = package.payload
-                print(f"Longitud del payload recibido: {len(payload)}")
-
-                # Mostrar el payload con saltos de línea si es texto
-                # try:
-                #     payload_str = payload.decode('utf-8')
-                #     print(f"Payload recibido:\n{payload_str}\n")
-                # except Exception:
-                #     print(f"Payload recibido binario:\n{payload}\n")
+                #print(f"Longitud del payload recibido: {len(payload)}")
                 f.write(payload)
-                received_total+=len(payload)+ PACKET_HEADER_SIZE
+                received_total += len(payload) + PACKET_HEADER_SIZE
+                seq ^= 1
 
-                seq ^= 1 
-
+            # FIN: cerrar cuando llega el FIN (el emisor reintentará hasta que vea este ACK)
             if package.fin:
                 fin = time.perf_counter()
                 print(f"[ACTIVE] Paquete final de parte de {addr} recibido.")

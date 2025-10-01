@@ -21,7 +21,7 @@ def main():
     args = parse_args()
 
     server = (args.host, args.port)
-    filename_with_path = args.dst + args.name
+    #filename_with_path = args.dst + args.name
     try:
 
         with socket(AF_INET, SOCK_DGRAM) as clientsocket:
@@ -31,9 +31,9 @@ def main():
             max_packet_size = PAYLOAD_SIZE
 
             if args.protocol == "sw" :
-                download_stop_and_wait(clientsocket, user_id, server, filename_with_path, max_packet_size)
+                download_stop_and_wait(clientsocket, user_id, server, args.dst, max_packet_size)
             elif  args.protocol == "sr" :
-                download_selective_repeat(clientsocket, user_id, server, filename_with_path, max_packet_size)
+                download_selective_repeat(clientsocket, user_id, server, args.dst, max_packet_size)
             else:
                 print("Funcionalidad desconocida.")
 

@@ -1,16 +1,17 @@
 import socket
 import os
 import time
+import queue
 
 from .constants import WINDOW_SIZE, SEQUENCE_NUMBER_RANGE, PAYLOAD_SIZE, PACKET_HEADER_SIZE
 from .packet import Packet
 from .tools import format_time
 
 TIMEOUT = 2 /1000  # Timeout en segundos
-MAX_RETRIES = 5  # Número máximo de reintentos para enviar un paquete
+MAX_RETRIES = 40 # Número máximo de reintentos para enviar un paquete
 RECV_TIMEOUT = 0.01 # para no bloquear en recvfrom
-TIMEOUT_RTX = 0.8 # Timeout para retransmisión en Selective Repeat
-timeout_server_dsr = 2 # Timeout en segundos
+TIMEOUT_RTX = 0.15 # Timeout para retransmisión en Selective Repeat
+timeout_server_dsr = 0.2 # Timeout en segundos
 timeout_client_upload_sr = 1.2 # Timeout en segundos
 
 def _in_window(seq, base, size, modulo):
@@ -19,58 +20,54 @@ def _in_window(seq, base, size, modulo):
 def _next_seq(x, modulo):
     return (x + 1) % modulo
 
-def upload_selective_repeat(clientsocket, user_id, server, src, max_payload_size, from_server = False, user_session = None):
-    # 1) poll cortito para no bloquear (no es el timeout de retransmisión)
+def upload_selective_repeat(clientsocket, user_id, server, src, max_payload_size, from_server=False, user_session=None):
     if not from_server:
         clientsocket.settimeout(RECV_TIMEOUT)
 
-    print("Empieza uplaod server")
-    window = {}          # seq -> {"pkt": Packet, "sent_at": float, "retries": int}
+    window = {}          # seq -> {"pkt": Packet, "sent_at": float, "retries": int, "acked": bool}
     window_base = 0
     next_seq = 0
     sent = 0
     eof = False
+
     ini = time.perf_counter()
 
     with open(src, "rb") as f:
-
-        print("Abre el archivo src")
-        i = 0
         while True:
-            print(f"Iteracion del while mayor no: {i}")
-
-            # --- (A) Recibir todos los ACKs disponibles ---
+            # (A) Recibir y procesar ACKs disponibles
             try:
-                print("Entra al try")
-                j = 0
                 while True:
-                    print(f"Iteracion del while dentro del try para recibir acks nro: {j}")
                     if from_server:
-                        if not user_session.queue.empty():
-                            print("Cola no vacia")
-                            ack = user_session.queue.get()
-                        else:
+                        try:
+                            ack = user_session.queue.get(timeout=RECV_TIMEOUT)
+                        except queue.Empty:
                             break
                     else:
-                        data, _ = clientsocket.recvfrom(max_payload_size)
+                        try:
+                            data, _ = clientsocket.recvfrom(PACKET_HEADER_SIZE + max_payload_size)
+                        except socket.timeout:
+                            break
                         ack = Packet.from_bytes(data)
-                    print("Recuperamos ack")
-                    if not ack.ack: 
-                        continue
-                    if ack.userId != user_id:
+
+                    if not ack.ack or ack.userId != user_id:
                         continue
 
                     ackn = ack.acknowledgment_number
+
+                    # <<< clave: NO filtrar por _in_window en ACKs.
+                    # Si el ACK corresponde a un paquete en vuelo, marcarlo.
                     if ackn in window:
-                        del window[ackn]
-                        # deslizar base tanto como se pueda
-                        while (window_base not in window) and (window_base != next_seq):
+                        window[ackn]["acked"] = True
+
+                        # deslizá base modularmente mientras el primer pendiente esté acked
+                        while window_base in window and window[window_base]["acked"]:
+                            window.pop(window_base)
                             window_base = _next_seq(window_base, SEQUENCE_NUMBER_RANGE)
 
-            except socket.timeout:
-                pass  # no había ACKs ahora
+            except Exception:
+                pass  # no bloquear
 
-            # --- (B) Retransmitir paquetes vencidos ---
+            # (B) Retransmitir vencidos
             now = time.time()
             for s, e in list(window.items()):
                 if now - e["sent_at"] >= TIMEOUT_RTX:
@@ -83,120 +80,126 @@ def upload_selective_repeat(clientsocket, user_id, server, src, max_payload_size
                     e["sent_at"] = time.time()
                     e["retries"] += 1
 
-            # --- (C) Llenar ventana con nuevos paquetes ---
+            # (C) Llenar ventana con nuevos paquetes (acá sí usar _in_window)
             while (not eof) and len(window) < WINDOW_SIZE and _in_window(
                 next_seq, window_base, WINDOW_SIZE, SEQUENCE_NUMBER_RANGE
             ):
-                payload = f.read(PAYLOAD_SIZE)
+                payload = f.read(max_payload_size)
                 is_last = (payload == b"")
                 flags = Packet.FLAG_FIN if is_last else Packet.FLAG_DATA
 
-                pkt = Packet(user_id, b"" if is_last else payload,
-                             flags=flags, sequence_number=next_seq)
+                pkt = Packet(user_id, b"" if is_last else payload, flags=flags, sequence_number=next_seq)
 
                 if from_server:
                     user_session.sock.sendto(pkt.toBytes(), server)
                 else:
                     clientsocket.sendto(pkt.toBytes(), server)
 
-                window[next_seq] = {"pkt": pkt, "sent_at": time.time(), "retries": 0}
+                window[next_seq] = {"pkt": pkt, "sent_at": time.time(), "retries": 0, "acked": False}
 
-                if is_last:
-                    eof = True
-                else:
+                if not is_last:
                     sent += len(payload)
 
+                eof = is_last
                 next_seq = _next_seq(next_seq, SEQUENCE_NUMBER_RANGE)
 
-            # --- (D) Condición de salida ---
+            # (D) Salir cuando FIN ya fue ACKeado y no quedan en vuelo
             if eof and not window:
                 break
 
-            # pequeño descanso opcional (el poll del socket ya frena la CPU)
-            # time.sleep(0.001)
-
-    clientsocket.settimeout(None)
     fin = time.perf_counter()
+    if not from_server:
+        clientsocket.settimeout(None)
     print(f"Archivo enviado correctamente. Total de bytes enviados: {sent}")
-    print(f"Tiempo total de transferencia: {format_time(fin - ini)}")
+    print(f"Tiempo total de transferencia: {format_time(fin - ini)} segundos.")
     return sent
 
-def download_selective_repeat(clientsocket, user_id, server, dest, max_payload_size, from_server = False, user_session = None):
-    
-    ini = time.perf_counter()
+
+def download_selective_repeat(clientsocket, user_id, server, dest, max_payload_size, from_server=False, user_session=None):
     received_total = 0
     current_base = 0
     buffer = {}
     fin_received = False
 
     with open(dest, "wb") as f:
-
         while True:
+            # Recibir siguiente paquete
             if from_server:
-                package = user_session.queue.get(timeout_server_dsr)
+                try:
+                    package = user_session.queue.get(timeout_server_dsr)
+                except queue.Empty:
+                    continue
             else:
-                data, _ = clientsocket.recvfrom(PACKET_HEADER_SIZE+max_payload_size)
+                data, _ = clientsocket.recvfrom(PACKET_HEADER_SIZE + max_payload_size)
                 package = Packet.from_bytes(data)
 
-            print(
-                f"[ACTIVE] Recibido de userId {user_id}: "
-                f"{package.to_string()}"
+            # ACK eco del seq recibido (siempre)
+            selective_ack = Packet(
+                user_id,
+                flags=Packet.FLAG_ACK,
+                sequence_number=package.sequence_number,
+                acknowledgment_number=package.sequence_number
             )
+            if from_server:
+                user_session.sock.sendto(selective_ack.to_bytes(), server)
+            else:
+                clientsocket.sendto(selective_ack.to_bytes(), server)
 
             received_seq = package.sequence_number
 
-            #in seqNumber range (64)
-            if (current_base - WINDOW_SIZE) <= received_seq and received_seq < (current_base + WINDOW_SIZE):
+            # Aceptar DATA sólo si está en la ventana (con wrap-around correcto)
+            if _in_window(received_seq, current_base, WINDOW_SIZE, SEQUENCE_NUMBER_RANGE):
 
-                selective_ack = Packet(
-                    user_id, 
-                    flags=Packet.FLAG_ACK,
-                    sequence_number=received_seq,
-                    acknowledgment_number=received_seq
-                )
+                if received_seq not in buffer:
+                    buffer[received_seq] = package
 
-                if from_server:
-                    user_session.sock.sendto(selective_ack.to_bytes(), server)
-                else:
-                    clientsocket.sendto(selective_ack.to_bytes(), server)
-                print(f"[ACTIVE] ACK de seqNum: {received_seq} fue enviado a {server}.")
-                
-                #Correctyl received: dentro de la ventana actual
-                if current_base <= received_seq and received_seq < current_base + WINDOW_SIZE:
+                # drenar en orden empezando desde current_base (modular)
+                while current_base in buffer:
+                    pkt = buffer.pop(current_base)
+                    if pkt.data:
+                        f.write(pkt.payload)
+                        received_total += len(pkt.payload)
+                    current_base = _next_seq(current_base, SEQUENCE_NUMBER_RANGE)
 
-                    if received_seq not in buffer:
-                        print(f"[BUFFER_UPDATE] Paquete de nro de secuencia: {received_seq} almacenado")
-                        buffer[received_seq] = package
+                # si llegó un FIN, marcarlo; salimos cuando buffer queda vacío
+                if package.fin:
+                    fin_received = True
 
-                    i = current_base
-                    limite = current_base + WINDOW_SIZE
-                    while i < limite:
+                if fin_received and len(buffer) == 0:
+                    print(f"[ACTIVE] Paquete final de parte de {server} recibido.")
+                    print(f"Cantidad total recibida: {received_total}.")
 
-                        if i in buffer: 
+                    # Quedate un ratito re-ACKeando FINs duplicados
+                    FIN_LINGER = 0.8   # 0.5–1.0s va bien
+                    end = time.time() + FIN_LINGER
+                    while time.time() < end:
+                        try:
+                            if from_server:
+                                dup = user_session.queue.get(timeout=0.1)
+                            else:
+                                clientsocket.settimeout(0.1)
+                                data, _ = clientsocket.recvfrom(PACKET_HEADER_SIZE + max_payload_size)
+                                dup = Packet.from_bytes(data)
+                        except (queue.Empty, socket.timeout):
+                            continue
 
-                            payload = (buffer[i]).payload
-                            print(f"[BUFFER_UPDATE] Paquete de nro de secuencia: {received_seq} removido de buffer")
-                            buffer.pop(i) #Borro entrada para mantener buffer pequeño
-
-                            #Añadir logica rstrip
-                            f.write(payload)
-                            current_base = _next_seq(current_base, SEQUENCE_NUMBER_RANGE)
-                            received_total+= len(payload)
-                        
+                        # re-ACK de cualquier duplicado (incluido el FIN)
+                        ack = Packet(
+                            user_id,
+                            flags=Packet.FLAG_ACK,
+                            sequence_number=dup.sequence_number,
+                            acknowledgment_number=dup.sequence_number
+                        )
+                        if from_server:
+                            user_session.sock.sendto(ack.to_bytes(), server)
                         else:
-                            break
+                            clientsocket.sendto(ack.to_bytes(), server)
 
-                    if package.fin:
-                        fin_received = True
-                    
-                    if len(buffer) == 0 and fin_received: 
-                        fin = time.perf_counter()
-                        print(f"[ACTIVE] Paquete final de parte de {server} recibido.")
-                        print(f"Cantidad total recibida: {received_total}.")
-                        print(f"Tiempo total de transferencia: {format_time(fin - ini)}")
-                        break
-                    
-    return
+                    break   
+
+
+            # fuera de ventana: ya ACKeamos arriba; ignorar payload y seguir
+
 
 
 

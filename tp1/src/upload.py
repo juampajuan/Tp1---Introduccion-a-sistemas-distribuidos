@@ -30,10 +30,10 @@ def parse_args():
 def main():
     args = parse_args()
 
-    filenameWithPath = args.src + args.name
+    #filenameWithPath = args.src + args.name
 
     # Valido archivo
-    if not os.path.isfile(filenameWithPath):
+    if not os.path.isfile(args.src):
         print("El archivo no existe")
         return
 
@@ -48,7 +48,7 @@ def main():
         protocolos = { "sw": upload_stop_and_wait, "sr": upload_selective_repeat}
 
         if args.protocol in protocolos:
-            protocolos[args.protocol](clientsocket, user_id, server, filenameWithPath, max_payload_size)
+            protocolos[args.protocol](clientsocket, user_id, server, args.src, max_payload_size)
         else:
                 print("Protocolo desconocido")
     
