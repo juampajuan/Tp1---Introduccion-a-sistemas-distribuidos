@@ -1,5 +1,6 @@
 from .constants import PACKET_HEADER_SIZE
 from .packet import Packet
+from .tools import format_time
 import socket
 import time
 TIMEOUT = 2 /1000  # Timeout en segundos
@@ -130,10 +131,3 @@ def download_stop_and_wait(clientsocket, user_id, addr, dest, max_payload_size, 
                 print(f"Cantidad total recibida: {received_total}.")
                 print(f"Tiempo total de transferencia: {format_time(fin - ini)} ")
                 break
-
-
-def format_time(seconds: float) -> str:
-    minutes = int(seconds // 60)
-    secs = int(seconds % 60)
-    millis = int((seconds - int(seconds)) * 1000)
-    return f"{minutes:02d}:{secs:02d}.{millis:03d} (MM:SS.mmm)"

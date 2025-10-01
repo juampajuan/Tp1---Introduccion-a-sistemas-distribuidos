@@ -4,6 +4,7 @@ import time
 
 from .constants import WINDOW_SIZE, SEQUENCE_NUMBER_RANGE, PAYLOAD_SIZE, PACKET_HEADER_SIZE
 from .packet import Packet
+from .tools import format_time
 
 TIMEOUT = 2 /1000  # Timeout en segundos
 MAX_RETRIES = 5  # Número máximo de reintentos para enviar un paquete
@@ -29,6 +30,7 @@ def upload_selective_repeat(clientsocket, user_id, server, src, max_payload_size
     next_seq = 0
     sent = 0
     eof = False
+    ini = time.perf_counter()
 
     with open(src, "rb") as f:
 
@@ -114,11 +116,14 @@ def upload_selective_repeat(clientsocket, user_id, server, src, max_payload_size
             # time.sleep(0.001)
 
     clientsocket.settimeout(None)
+    fin = time.perf_counter()
     print(f"Archivo enviado correctamente. Total de bytes enviados: {sent}")
+    print(f"Tiempo total de transferencia: {format_time(fin - ini)}")
     return sent
 
 def download_selective_repeat(clientsocket, user_id, server, dest, max_payload_size, from_server = False, user_session = None):
     
+    ini = time.perf_counter()
     received_total = 0
     current_base = 0
     buffer = {}
@@ -175,7 +180,7 @@ def download_selective_repeat(clientsocket, user_id, server, dest, max_payload_s
 
                             #Añadir logica rstrip
                             f.write(payload)
-                            current_base+=1
+                            current_base = _next_seq(current_base, SEQUENCE_NUMBER_RANGE)
                             received_total+= len(payload)
                         
                         else:
@@ -185,8 +190,10 @@ def download_selective_repeat(clientsocket, user_id, server, dest, max_payload_s
                         fin_received = True
                     
                     if len(buffer) == 0 and fin_received: 
+                        fin = time.perf_counter()
                         print(f"[ACTIVE] Paquete final de parte de {server} recibido.")
                         print(f"Cantidad total recibida: {received_total}.")
+                        print(f"Tiempo total de transferencia: {format_time(fin - ini)}")
                         break
                     
     return
