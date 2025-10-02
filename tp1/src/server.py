@@ -57,7 +57,7 @@ def validar_pedido(packet):
     return VALIDACION_OK, valores
 
 
-def validar_nombre(nombre):
+def validar_nombre(nombre,storage):
     # 1) Validar caracteres no permitidos en el nombre
     for c in CARACTERES_NO_PERMITIDOS:
         if c in nombre:
@@ -65,7 +65,11 @@ def validar_nombre(nombre):
     # 2) Validar nombres reservados
     if nombre in NOMBRES_RESERVADOS:
         return (ERROR_NOMBRE_INVALIDO, f"Error: no se permiten archivos con el nombre {nombre}")
-    # 3) Si pasa todas las validaciones
+    # 3) Validar si ya existe un archivo con el mismo nombre en storage
+    filename_with_path = storage + "/" + nombre
+    if os.path.exists(filename_with_path):
+        return (ERROR_NOMBRE_INVALIDO, f"Error: ya existe un archivo con el nombre {nombre} en el servidor")
+    # 4) Si pasa todas las validaciones
     return VALIDACION_OK, "OK"
 
 def executing_protocol(protocol, user_session, user_id, file_name, storage, max_payload_size):
@@ -113,6 +117,10 @@ def handle_session(user_session, packet_inicial, storage):
     client_seq = packet.sequence_number
     error_handshake = False
     validacion_ok = False
+    servicio = ""
+
+
+
 
     while estado == Estado.SYNCING and loops < MAX_LOOPS:
         logger.info(f"[HANDSHAKE] Iteración {loops+1} para userId {user_id}")
@@ -143,7 +151,7 @@ def handle_session(user_session, packet_inicial, storage):
                         #si es valido el modo de servicio
                         #queda validar nombre de archivo
                         nombre = res_val[1]["nombre"]
-                        res_nombre = validar_nombre(nombre)
+                        res_nombre = validar_nombre(nombre,storage)
                         if res_nombre [0] == VALIDACION_OK:
                             #la solicitud es correcta envio sin + ack y OK
                             logger.info(f"Pedido válido de userId {user_id}: servicio {res_val[1]} nombre {nombre}")
@@ -222,7 +230,7 @@ def handle_session(user_session, packet_inicial, storage):
 
     executing_protocol(res_val[1]["servicio"], user_session, user_id, res_val[1]["nombre"], storage, PAYLOAD_SIZE)
 
-
+    user_session.estado = Estado.CLOSING
     logger.info(f"Finalizando sesion para user: {user_id}, estado {user_session.get_estado()}")
     return
 

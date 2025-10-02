@@ -20,9 +20,9 @@ def parse_args():
     return p.parse_args()
 
 def main():
+    args = parse_args()
     log_level = logging.DEBUG if args.verbose else logging.INFO
     logging.basicConfig(level=log_level, format='[%(levelname)s] %(message)s')
-    args = parse_args()
 
     server = (args.host, args.port)
     filename_with_path = args.dst + args.name

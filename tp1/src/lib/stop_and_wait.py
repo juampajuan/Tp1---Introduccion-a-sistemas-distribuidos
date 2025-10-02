@@ -24,7 +24,7 @@ def upload_stop_and_wait(clientsocket, user_id, server, src, max_payload_size, f
             while True:
                 payload = f.read(max_payload_size)
                 is_last = (payload == b'')
-                flags = Packet.FLAG_FIN if is_last else Packet.FLAG_DATA
+                flags = Packet.FLAG_FIN | Packet.FLAG_DATA if is_last else Packet.FLAG_DATA
 
                 packet = Packet(user_id, payload, flags=flags, sequence_number=seq)
 
@@ -38,6 +38,13 @@ def upload_stop_and_wait(clientsocket, user_id, server, src, max_payload_size, f
                         else:
                             data, _ = clientsocket.recvfrom(max_payload_size)
                             ack = Packet.from_bytes(data)
+                            if ack.connect == 1:
+                                # cliente recibe nuevamente el synack porque se perdio
+                                # el ultimo ack que envio el cliente para que el server cierre el handshake
+                                # reenvio el ultimo ack para que el server cierre el handshake
+                                ack = Packet(user_id, flags=Packet.FLAG_CONNECT | Packet.FLAG_ACK)
+                                clientsocket.sendto(ack.to_bytes(), server)
+                                continue
 
                         #logger.debug(f"Recibi ack {ack.acknowledgment_number}")
 
@@ -68,7 +75,7 @@ def upload_stop_and_wait(clientsocket, user_id, server, src, max_payload_size, f
 
 
 
-def download_stop_and_wait(clientsocket, user_id, addr, dest, max_payload_size, from_server=False, user_session=None):
+def download_stop_and_wait(clientsocket, user_id, addr, dest, max_payload_size, from_server=False, user_session=None, ):
     seq = 0
     received_total = 0
 
@@ -85,6 +92,13 @@ def download_stop_and_wait(clientsocket, user_id, addr, dest, max_payload_size, 
             else:
                 data, _ = clientsocket.recvfrom(PACKET_HEADER_SIZE + max_payload_size)
                 package = Packet.from_bytes(data)
+                if package.connect == 1:
+                    #cliente recibe nuevamente el synack porque se perdio
+                    #el ultimo ack que envio el cliente para que el server cierre el handshake
+                    #reenvio el ultimo ack que el server cierre el handshake
+                    ack = Packet(user_id, flags=Packet.FLAG_CONNECT | Packet.FLAG_ACK)
+                    clientsocket.sendto(ack.to_bytes(), addr)
+                    continue
 
 
 

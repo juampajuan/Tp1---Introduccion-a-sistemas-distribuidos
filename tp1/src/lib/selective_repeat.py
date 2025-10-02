@@ -52,6 +52,14 @@ def upload_selective_repeat(clientsocket, user_id, server, src, max_payload_size
                             break
                         ack = Packet.from_bytes(data)
 
+                    if ack.connect == 1:
+                        # cliente recibe nuevamente el synack porque se perdio
+                        # el ultimo ack que envio el cliente para que el server cierre el handshake
+                        # reenvio el ultimo ack para que el server cierre el handshake
+                        ack = Packet(user_id, flags=Packet.FLAG_CONNECT | Packet.FLAG_ACK)
+                        clientsocket.sendto(ack.to_bytes(), server)
+                        continue
+
                     if not ack.ack or ack.userId != user_id:
                         continue
 
@@ -89,7 +97,7 @@ def upload_selective_repeat(clientsocket, user_id, server, src, max_payload_size
             ):
                 payload = f.read(max_payload_size)
                 is_last = (payload == b"")
-                flags = Packet.FLAG_FIN if is_last else Packet.FLAG_DATA
+                flags = Packet.FLAG_FIN | Packet.FLAG_DATA if is_last else Packet.FLAG_DATA
 
                 pkt = Packet(user_id, b"" if is_last else payload, flags=flags, sequence_number=next_seq)
 
@@ -135,6 +143,14 @@ def download_selective_repeat(clientsocket, user_id, server, dest, max_payload_s
             else:
                 data, _ = clientsocket.recvfrom(PACKET_HEADER_SIZE + max_payload_size)
                 package = Packet.from_bytes(data)
+                if package.connect == 1:
+                    # cliente recibe nuevamente el synack porque se perdio
+                    # el ultimo ack que envio el cliente para que el server cierre el handshake
+                    # reenvio el ultimo ack para que el server cierre el handshake
+                    ack = Packet(user_id, flags=Packet.FLAG_CONNECT | Packet.FLAG_ACK)
+                    clientsocket.sendto(ack.to_bytes(), server)
+                    continue
+
 
             # ACK eco del seq recibido (siempre)
             selective_ack = Packet(
@@ -203,9 +219,3 @@ def download_selective_repeat(clientsocket, user_id, server, dest, max_payload_s
         logger.info(f"Tiempo total de transferencia: {format_time(fin - ini)}")
 
             # fuera de ventana: ya ACKeamos arriba; ignorar payload y seguir
-
-
-
-
-        
-    
