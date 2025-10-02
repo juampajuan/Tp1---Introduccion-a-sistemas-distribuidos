@@ -5,15 +5,22 @@ import socket
 import time
 import queue
 import logging
-TIMEOUT = 2 /1000  # Timeout en segundos
+TIMEOUT = 2 / 1000  # Timeout en segundos
 MAX_RETRIES = 30  # Timeout en segundos
-timeout_server_dsw = 0.05 # Timeout en segundos
-timeout_client_upload_sw = 0.05 # Timeout en segundos
+timeout_server_dsw = 0.05  # Timeout en segundos
+timeout_client_upload_sw = 0.05  # Timeout en segundos
 
 logger = logging.getLogger("SW")
 
 
-def upload_stop_and_wait(clientsocket, user_id, server, src, max_payload_size, from_server = False, user_session = None):
+def upload_stop_and_wait(
+        clientsocket,
+        user_id,
+        server,
+        src,
+        max_payload_size,
+        from_server=False,
+        user_session=None):
 
     clientsocket.settimeout(timeout_client_upload_sw)
     seq = 0            # alternante: 0,1,0,1...
@@ -26,38 +33,46 @@ def upload_stop_and_wait(clientsocket, user_id, server, src, max_payload_size, f
                 is_last = (payload == b'')
                 flags = Packet.FLAG_FIN | Packet.FLAG_DATA if is_last else Packet.FLAG_DATA
 
-                packet = Packet(user_id, payload, flags=flags, sequence_number=seq)
+                packet = Packet(
+                    user_id,
+                    payload,
+                    flags=flags,
+                    sequence_number=seq)
 
                 retries = 0
                 while True:
 
                     clientsocket.sendto(packet.toBytes(), server)
-                    try:   
+                    try:
                         if from_server:
-                            ack = user_session.queue.get(timeout=timeout_client_upload_sw)
+                            ack = user_session.queue.get(
+                                timeout=timeout_client_upload_sw)
                         else:
                             data, _ = clientsocket.recvfrom(max_payload_size)
                             ack = Packet.from_bytes(data)
                             if ack.connect == 1:
                                 # cliente recibe nuevamente el synack porque se perdio
                                 # el ultimo ack que envio el cliente para que el server cierre el handshake
-                                # reenvio el ultimo ack para que el server cierre el handshake
-                                ack = Packet(user_id, flags=Packet.FLAG_CONNECT | Packet.FLAG_ACK)
+                                # reenvio el ultimo ack para que el server
+                                # cierre el handshake
+                                ack = Packet(
+                                    user_id, flags=Packet.FLAG_CONNECT | Packet.FLAG_ACK)
                                 clientsocket.sendto(ack.to_bytes(), server)
                                 continue
 
-                        #logger.debug(f"Recibi ack {ack.acknowledgment_number}")
+                        # logger.debug(f"Recibi ack {ack.acknowledgment_number}")
 
                         if (ack.userId == user_id
                             and ack.ack
-                            and ack.acknowledgment_number == seq):
+                                and ack.acknowledgment_number == seq):
                             break  # ACK correcto para este seq
                     except (socket.timeout, queue.Empty):
                         pass
 
                     retries += 1
                     if retries > MAX_RETRIES:
-                        logger.error("Número máximo de reintentos alcanzado. Abortando.")
+                        logger.error(
+                            "Número máximo de reintentos alcanzado. Abortando.")
                         return
 
                 if is_last:
@@ -69,13 +84,20 @@ def upload_stop_and_wait(clientsocket, user_id, server, src, max_payload_size, f
     finally:
         clientsocket.settimeout(None)
         fin = time.perf_counter()
-    logger.info(f"Archivo enviado correctamente. Total de bytes enviados: {sent}")
+    logger.info(
+        f"Archivo enviado correctamente. Total de bytes enviados: {sent}")
     logger.info(f"Tiempo total de transferencia: {format_time(fin - ini)}")
 
 
-
-
-def download_stop_and_wait(clientsocket, user_id, addr, dest, max_payload_size, from_server=False, user_session=None, ):
+def download_stop_and_wait(
+    clientsocket,
+    user_id,
+    addr,
+    dest,
+    max_payload_size,
+    from_server=False,
+    user_session=None,
+):
     seq = 0
     received_total = 0
 
@@ -85,22 +107,23 @@ def download_stop_and_wait(clientsocket, user_id, addr, dest, max_payload_size, 
             # Recibir paquete (cola si corre en el server)
             if from_server:
                 try:
-                    package = user_session.queue.get(timeout=timeout_server_dsw)
+                    package = user_session.queue.get(
+                        timeout=timeout_server_dsw)
                 except queue.Empty:
                     # No llegó a tiempo (delay/pérdida); seguir esperando
                     continue
             else:
-                data, _ = clientsocket.recvfrom(PACKET_HEADER_SIZE + max_payload_size)
+                data, _ = clientsocket.recvfrom(
+                    PACKET_HEADER_SIZE + max_payload_size)
                 package = Packet.from_bytes(data)
                 if package.connect == 1:
-                    #cliente recibe nuevamente el synack porque se perdio
-                    #el ultimo ack que envio el cliente para que el server cierre el handshake
-                    #reenvio el ultimo ack que el server cierre el handshake
-                    ack = Packet(user_id, flags=Packet.FLAG_CONNECT | Packet.FLAG_ACK)
+                    # cliente recibe nuevamente el synack porque se perdio
+                    # el ultimo ack que envio el cliente para que el server cierre el handshake
+                    # reenvio el ultimo ack que el server cierre el handshake
+                    ack = Packet(
+                        user_id, flags=Packet.FLAG_CONNECT | Packet.FLAG_ACK)
                     clientsocket.sendto(ack.to_bytes(), addr)
                     continue
-
-
 
             # Enviar ACK eco del seq recibido (siempre ACKear)
             ack = Packet(
@@ -114,20 +137,25 @@ def download_stop_and_wait(clientsocket, user_id, addr, dest, max_payload_size, 
             else:
                 clientsocket.sendto(ack.to_bytes(), addr)
 
-            #print(f"[ACTIVE] ACK enviado a userId {user_id}: {ack.to_string()}")
+            # print(f"[ACTIVE] ACK enviado a userId {user_id}: {ack.to_string()}")
 
             # Consumir DATA sólo si es el seq esperado; luego alternar
             if package.data and package.sequence_number == seq:
                 payload = package.payload
-                #print(f"Longitud del payload recibido: {len(payload)}")
+                # print(f"Longitud del payload recibido: {len(payload)}")
                 f.write(payload)
                 received_total += len(payload) + PACKET_HEADER_SIZE
                 seq ^= 1
 
-            # FIN: cerrar cuando llega el FIN (el emisor reintentará hasta que vea este ACK)
+            # FIN: cerrar cuando llega el FIN (el emisor reintentará hasta que
+            # vea este ACK)
             if package.fin:
                 fin = time.perf_counter()
-                logger.debug(f"[ACTIVE] Paquete final de parte de {addr} recibido.")
+                logger.debug(
+                    f"[ACTIVE] Paquete final de parte de {addr} recibido.")
                 logger.info(f"Cantidad total recibida: {received_total}.")
-                logger.info(f"Tiempo total de transferencia: {format_time(fin - ini)} ")
+                logger.info(
+                    f"Tiempo total de transferencia: {
+                        format_time(
+                            fin - ini)} ")
                 break

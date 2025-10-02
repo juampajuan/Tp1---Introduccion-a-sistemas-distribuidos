@@ -22,12 +22,39 @@ ERROR_NOMBRE_INVALIDO = 4
 # Lista de caracteres no permitidos para nombres de archivo en Linux
 CARACTERES_NO_PERMITIDOS = ['/', '\\', '\0', '*', '?', ':', '<', '>', '|', '"']
 
-# Lista de nombres reservados para archivos en Linux (por conflicto o confusión)
+# Lista de nombres reservados para archivos en Linux (por conflicto o
+# confusión)
 NOMBRES_RESERVADOS = [
-    '.', '..', 'bin', 'boot', 'dev', 'etc', 'home', 'lib', 'media', 'mnt', 'opt',
-    'proc', 'root', 'run', 'sbin', 'srv', 'sys', 'tmp', 'usr', 'var',
-    'ls', 'cat', 'echo', 'sh', 'bash', 'python', 'init', 'systemd', 'rc', 'service'
-]
+    '.',
+    '..',
+    'bin',
+    'boot',
+    'dev',
+    'etc',
+    'home',
+    'lib',
+    'media',
+    'mnt',
+    'opt',
+    'proc',
+    'root',
+    'run',
+    'sbin',
+    'srv',
+    'sys',
+    'tmp',
+    'usr',
+    'var',
+    'ls',
+    'cat',
+    'echo',
+    'sh',
+    'bash',
+    'python',
+    'init',
+    'systemd',
+    'rc',
+    'service']
 
 WINDOW_SIZE = 32
 SEQUENCE_NUMBER_RANGE = 64

@@ -6,6 +6,7 @@ import logging
 
 logger = logging.getLogger("START-SERVER")
 
+
 def main():
     parser = argparse.ArgumentParser(
         prog='start-server',
@@ -25,7 +26,9 @@ def main():
     args = parser.parse_args()
 
     log_level = logging.DEBUG if args.verbose else logging.INFO
-    logging.basicConfig(level=log_level, format='[%(name)s][%(levelname)s] %(message)s')
+    logging.basicConfig(
+        level=log_level,
+        format='[%(name)s][%(levelname)s] %(message)s')
 
     # Valida parametros de configuracion del server
     if args.host is None or args.port is None or args.storage is None:

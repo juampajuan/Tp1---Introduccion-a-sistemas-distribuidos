@@ -1,4 +1,6 @@
 import struct
+
+
 class Packet:
     """
     Estructura del packet (en bytes):
@@ -76,7 +78,7 @@ class Packet:
         sequence_number = struct.unpack('!I', data[3:7])[0]
         acknowledgment_number = struct.unpack('!I', data[7:11])[0]
         payload_length = struct.unpack('!H', data[11:13])[0]
-        payload = data[13:13+payload_length]
+        payload = data[13:13 + payload_length]
         return cls(user_id,
                    payload,
                    flags,
