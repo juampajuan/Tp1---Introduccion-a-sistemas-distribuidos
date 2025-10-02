@@ -121,7 +121,7 @@ def handle_session(user_session, packet_inicial, storage):
     Luego, si el estado es ACTIVE, recibe mensajes y responde con ACK.
     """
     from user_session import Estado
-    timeout_handshake = 500/1000  # 0.5 segundos
+    timeout_handshake = 0.5 #segundos
     MAX_LOOPS = 10
     loops = 0
     waiting_sinack = False
@@ -134,6 +134,7 @@ def handle_session(user_session, packet_inicial, storage):
     server_seq = 0
     client_seq = packet.sequence_number
     error_handshake = False
+    validacion_ok = False
 
     while estado == Estado.SYNCING and loops < MAX_LOOPS:
         print(f"[HANDSHAKE] Iteración {loops+1} para userId {user_id}")
@@ -183,6 +184,7 @@ def handle_session(user_session, packet_inicial, storage):
                                 f"(iteraciones: {loops})")
                             user_session.sock.sendto(response.toBytes(), user_session.addr)
                             waiting_sinack = True
+                            validacion_ok = True
                         else:
                             #hay un error en el nombre envio sin+ack+error
                             error_handshake = True
@@ -221,9 +223,18 @@ def handle_session(user_session, packet_inicial, storage):
                             f"(iteraciones: {loops})")
                         user_session.sock.sendto(response.toBytes(), user_session.addr)
                         waiting_sinack = True
+        elif packet is None and waiting_sinack and validacion_ok:
+            # Retransmisión de SYN+ACK
+            user_session.sock.sendto(response.toBytes(), user_session.addr)
+            print(
+                f"Retransmitiendo SYNACK al usuario {user_id} "
+                f"(iteraciones: {loops})"
+            )
+
         try:
             print(f"[HANDSHAKE] Esperando paquete de userId {user_id}...")
             packet = user_session.queue.get(timeout_handshake)
+            print(f"[HANDSHAKE] Paquete recibido para userId {user_id}: {packet.to_string()}")
         except Empty:
             print(f"[HANDSHAKE] Timeout esperando paquete de userId {user_id}")
             packet = None
@@ -264,9 +275,8 @@ def start(host, port, storage):
         while True:
             try:
                 data, addr = sock.recvfrom(MAX_UDP_PAYLOAD_LENGTH)
-            except socket.timeout:
+            except Exception as e:
                 continue
-            
             try:
                 packet = Packet.from_bytes(data)
                 user_id = packet.userId
@@ -284,8 +294,8 @@ def start(host, port, storage):
             elif user_id in server_sessions:
                 user_session = server_sessions[user_id]
                 user_session.queue.put(packet)
-                # print(f"Paquete encolado para user_id {user_id}")
-                # print(f"Paquete encolado: {packet.to_string()}")
+                #print(f"Paquete encolado para user_id {user_id}")
+                #print(f"Paquete encolado: {packet.to_string()}")
             else:
                 print(
                     f"Paquete descartado: user_id {user_id} "

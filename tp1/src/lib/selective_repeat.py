@@ -120,7 +120,7 @@ def download_selective_repeat(clientsocket, user_id, server, dest, max_payload_s
     current_base = 0
     buffer = {}
     fin_received = False
-
+    ini = time.perf_counter()
     with open(dest, "wb") as f:
         while True:
             # Recibir siguiente paquete
@@ -194,9 +194,10 @@ def download_selective_repeat(clientsocket, user_id, server, dest, max_payload_s
                             user_session.sock.sendto(ack.to_bytes(), server)
                         else:
                             clientsocket.sendto(ack.to_bytes(), server)
+                    break
 
-                    break   
-
+        fin = time.perf_counter()
+        print(f"Tiempo total de transferencia: {format_time(fin - ini)}")
 
             # fuera de ventana: ya ACKeamos arriba; ignorar payload y seguir
 

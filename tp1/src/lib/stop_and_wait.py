@@ -6,8 +6,8 @@ import time
 import queue
 TIMEOUT = 2 /1000  # Timeout en segundos
 MAX_RETRIES = 30  # Timeout en segundos
-timeout_server_dsw = 0.1 # Timeout en segundos
-timeout_client_upload_sw = 0.1 # Timeout en segundos
+timeout_server_dsw = 0.05 # Timeout en segundos
+timeout_client_upload_sw = 0.05 # Timeout en segundos
 
 
 def upload_stop_and_wait(clientsocket, user_id, server, src, max_payload_size, from_server = False, user_session = None):
@@ -37,7 +37,7 @@ def upload_stop_and_wait(clientsocket, user_id, server, src, max_payload_size, f
                             data, _ = clientsocket.recvfrom(max_payload_size)
                             ack = Packet.from_bytes(data)
 
-                        print(f"Recibi ack {ack.acknowledgment_number}")
+                        #print(f"Recibi ack {ack.acknowledgment_number}")
 
                         if (ack.userId == user_id
                             and ack.ack
@@ -84,7 +84,7 @@ def download_stop_and_wait(clientsocket, user_id, addr, dest, max_payload_size, 
                 data, _ = clientsocket.recvfrom(PACKET_HEADER_SIZE + max_payload_size)
                 package = Packet.from_bytes(data)
 
-            print(f"[ACTIVE] Recibido de userId {user_id}: {package.to_string()}")
+            #print(f"[ACTIVE] Recibido de userId {user_id}: {package.to_string()}")
 
             # Enviar ACK eco del seq recibido (siempre ACKear)
             ack = Packet(
@@ -98,7 +98,7 @@ def download_stop_and_wait(clientsocket, user_id, addr, dest, max_payload_size, 
             else:
                 clientsocket.sendto(ack.to_bytes(), addr)
 
-            print(f"[ACTIVE] ACK enviado a userId {user_id}: {ack.to_string()}")
+            #print(f"[ACTIVE] ACK enviado a userId {user_id}: {ack.to_string()}")
 
             # Consumir DATA sólo si es el seq esperado; luego alternar
             if package.data and package.sequence_number == seq:
