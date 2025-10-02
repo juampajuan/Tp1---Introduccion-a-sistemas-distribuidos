@@ -35,8 +35,8 @@ def upload_selective_repeat(
         user_session=None):
     if not from_server:
         clientsocket.settimeout(RECV_TIMEOUT)
-
-    window = {}          # seq -> {"pkt": Packet, "sent_at": float, "retries": int, "acked": bool}
+    # seq -> {"pkt": Packet, "sent_at": float, "retries": int, "acked": bool}
+    window = {}
     window_base = 0
     next_seq = 0
     sent = 0
@@ -64,11 +64,12 @@ def upload_selective_repeat(
 
                     if ack.connect == 1:
                         # cliente recibe nuevamente el synack porque se perdio
-                        # el ultimo ack que envio el cliente para que el server cierre el handshake
-                        # reenvio el ultimo ack para que el server cierre el
-                        # handshake
+                        # el ultimo ack que envio el cliente para que el
+                        # server cierre el handshake reenvio el ultimo ack para
+                        # que el server cierre el handshake
                         ack = Packet(
-                            user_id, flags=Packet.FLAG_CONNECT | Packet.FLAG_ACK)
+                            user_id,
+                            flags=Packet.FLAG_CONNECT | Packet.FLAG_ACK)
                         clientsocket.sendto(ack.to_bytes(), server)
                         continue
 
@@ -84,7 +85,8 @@ def upload_selective_repeat(
 
                         # deslizá base modularmente mientras el primer
                         # pendiente esté acked
-                        while window_base in window and window[window_base]["acked"]:
+                        while (window_base in window
+                               and window[window_base]["acked"]):
                             window.pop(window_base)
                             window_base = _next_seq(
                                 window_base, SEQUENCE_NUMBER_RANGE)
@@ -111,7 +113,10 @@ def upload_selective_repeat(
             ):
                 payload = f.read(max_payload_size)
                 is_last = (payload == b"")
-                flags = Packet.FLAG_FIN | Packet.FLAG_DATA if is_last else Packet.FLAG_DATA
+                if is_last:
+                    flags = Packet.FLAG_FIN | Packet.FLAG_DATA
+                else:
+                    flags = Packet.FLAG_DATA
 
                 pkt = Packet(
                     user_id,
@@ -180,9 +185,8 @@ def download_selective_repeat(
                 package = Packet.from_bytes(data)
                 if package.connect == 1:
                     # cliente recibe nuevamente el synack porque se perdio
-                    # el ultimo ack que envio el cliente para que el server cierre el handshake
-                    # reenvio el ultimo ack para que el server cierre el
-                    # handshake
+                    # el ultimo ack que envio el cliente para que el
+                    # server cierre el handshake reenvio el ultimo ack
                     ack = Packet(
                         user_id, flags=Packet.FLAG_CONNECT | Packet.FLAG_ACK)
                     clientsocket.sendto(ack.to_bytes(), server)
@@ -228,7 +232,8 @@ def download_selective_repeat(
 
                 if fin_received and len(buffer) == 0:
                     logger.debug(
-                        f"[ACTIVE] Paquete final de parte de {server} recibido.")
+                        f"[ACTIVE] Paquete final de parte de {server}"
+                        f" recibido.")
                     logger.info(f"Cantidad total recibida: {received_total}.")
 
                     # Quedate un ratito re-ACKeando FINs duplicados

@@ -1,4 +1,4 @@
-from socket import *
+import socket
 import argparse
 from lib.handshakeWithServer import handshake_with_server
 from lib.stop_and_wait import download_stop_and_wait
@@ -33,7 +33,8 @@ def parse_args():
             "sw",
             "sr"],
         default="sw",
-        help="Protocolo de recuperación de errores (sw=DownloadStop&Wait, sr=DownloadSelectiveRepeat)")
+        help="Protocolo de recuperación de errores "
+             "(sw=DownloadStop&Wait, sr=DownloadSelectiveRepeat)")
 
     return p.parse_args()
 
@@ -47,7 +48,7 @@ def main():
     filename_with_path = args.dst + args.name
     try:
 
-        with socket(AF_INET, SOCK_DGRAM) as clientsocket:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as clientsocket:
 
             user_id = handshake_with_server(
                 clientsocket, server, "d" + args.protocol, args.name)

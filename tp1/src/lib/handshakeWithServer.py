@@ -1,6 +1,6 @@
-from lib.constants import PACKET_HEADER_SIZE
-from lib.packet import Packet
-from lib.constants import PAYLOAD_SIZE
+from .constants import PACKET_HEADER_SIZE
+from .packet import Packet
+from .constants import PAYLOAD_SIZE
 import logging
 
 USERID_INICIAL = 65535  # User ID inicial para la handshake
@@ -60,15 +60,19 @@ def handshake_with_server(
                     return user_id
                 else:
                     logger.error(
-                        "Detalles de conexión inválidos. Abortando handshake actual.")
-                    break  # Sale del ciclo interno y reintenta el envío externo
+                        "Detalles de conexión inválidos."
+                        " Abortando handshake actual.")
+                    break
+                    # Sale del ciclo interno y reintenta # el envío externo
             except Exception as e:
                 logger.error(f"Error en handshake {e}")
                 logger.debug(
-                    f"intento de recibir SIN+ACK: {intento_recv + 1}/{max_recvs}")
+                    f"intento de recibir "
+                    f"SIN+ACK: {intento_recv + 1}/{max_recvs}")
                 if intento_recv == max_recvs - 1:
                     logger.debug(
-                        "No se recibió respuesta tras 10 intentos de recv. Reintentando envío inicial...")
+                        "No se recibió respuesta tras 10 intentos de recv."
+                        " Reintentando envío inicial...")
         # no pudo recibir el user id, se vuelve a intentar el envio inicial
     logger.error(
         "No se pudo completar el handshake tras 3 intentos. Proceso abortado.")

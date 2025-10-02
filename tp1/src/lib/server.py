@@ -2,9 +2,12 @@ import socket
 import os
 import threading
 import logging
-from .constants import ERROR_FALTA_CAMPO, ERROR_SERVICIO_INVALIDO, ERROR_NOMBRE_INVALIDO, VALIDACION_OK, NOMBRES_RESERVADOS, CARACTERES_NO_PERMITIDOS
+from .constants import (ERROR_FALTA_CAMPO, ERROR_SERVICIO_INVALIDO,
+                       ERROR_NOMBRE_INVALIDO, VALIDACION_OK,
+                       NOMBRES_RESERVADOS, CARACTERES_NO_PERMITIDOS)
 from .stop_and_wait import upload_stop_and_wait, download_stop_and_wait
-from .selective_repeat import upload_selective_repeat, download_selective_repeat
+from .selective_repeat import (upload_selective_repeat,
+                              download_selective_repeat)
 from .packet import Packet
 from .constants import MAX_UDP_PAYLOAD_LENGTH, PAYLOAD_SIZE
 from .user_session import UserSession
@@ -32,12 +35,14 @@ def generar_user_id():
 
 def validar_pedido(packet):
     """
-    Valida el payload con el pedido del cliente y extrae servicio, path, nombre y MTU.
+    Valida el payload con el pedido del cliente y extrae servicio,
+     path, nombre y MTU.
     Devuelve una tupla:
     (1, "ERROR: Falta el campo <campo>") si falta un campo
     (2, "ERROR: servicio <valor> no valido") si el servicio no es válido
     (3, "ERROR: MTU <valor> no válido") si MTU no es mayor a 50
-    (0, {"servicio":..., "path":..., "nombre":..., "MTU":...}) si el pedido es correcto
+    (0, {"servicio":..., "path":..., "nombre":..., "MTU":...})
+     si el pedido es correcto
     """
     payload_str = packet.payload.rstrip(b'\x00').decode('utf-8').strip()
     fields = payload_str.split('\n')
@@ -78,10 +83,12 @@ def validar_nombre(nombre, storage, servicio):
             f"Error: no se permiten archivos con el nombre {nombre}")
     # 3) Validar si ya existe un archivo con el mismo nombre en storage
     filename_with_path = storage + "/" + nombre
-    if os.path.exists(filename_with_path) and (servicio == "sw" or servicio == "sr"):
+    if (os.path.exists(filename_with_path) and
+            (servicio == "sw" or servicio == "sr")):
         return (
             ERROR_NOMBRE_INVALIDO,
-            f"Error: ya existe un archivo con el nombre {nombre} en el servidor")
+            f"Error: ya existe un archivo con el nombre"
+            f" {nombre} en el servidor")
     # 4) Si pasa todas las validaciones
     return VALIDACION_OK, "OK"
 
@@ -151,6 +158,7 @@ def handle_session(user_session, packet_inicial, storage):
     - Si se itera más de tres veces sin finalizar handshake aborta
     Luego, si el estado es ACTIVE, recibe mensajes y responde con ACK.
     """
+    global response
     from .user_session import Estado
     timeout_handshake = 0.5  # segundos
     MAX_LOOPS = 10
@@ -166,11 +174,15 @@ def handle_session(user_session, packet_inicial, storage):
     client_seq = packet.sequence_number
     error_handshake = False
     validacion_ok = False
+    res_val = (None, None)  # Inicializar para evitar referencia antes
+    # de asignación
 
     while estado == Estado.SYNCING and loops < MAX_LOOPS:
-        logger.info(f"[HANDSHAKE] Iteración {loops + 1} para userId {user_id}")
+        logger.info(f"[HANDSHAKE] Iteración {loops + 1}"
+                    f" para userId {user_id}")
         logger.debug(f"Manejo de sesion usuario {
-                     user_session.user_id} - estado {user_session.get_estado()}")
+                     user_session.user_id} "
+                     f"- estado {user_session.get_estado()}")
         loops += 1
         if packet is not None and packet.connect == 1:
             logger.debug(
@@ -207,7 +219,7 @@ def handle_session(user_session, packet_inicial, storage):
                             logger.info(
                                 f"Pedido válido de userId {user_id}: servicio {
                                     res_val[1]} nombre {nombre}")
-                            payload = f"OK".encode('utf-8')
+                            payload = "OK".encode('utf-8')
                             response = Packet(
                                 user_id,
                                 payload=payload,
@@ -228,7 +240,8 @@ def handle_session(user_session, packet_inicial, storage):
                             # hay un error en el nombre envio sin+ack+error
                             error_handshake = True
                             logger.error(
-                                f"Error en el nombre del archivo para userId {user_id}: {
+                                f"Error en el nombre del archivo "
+                                f"para userId {user_id}: {
                                     res_nombre[1]}")
                             payload = res_nombre[1].encode('utf-8')
                             response = Packet(
@@ -260,7 +273,7 @@ def handle_session(user_session, packet_inicial, storage):
                                    Packet.FLAG_SYN |
                                    Packet.FLAG_ACK),
                             sequence_number=server_seq,
-                            acknowledgment_number=client_seq + len(payload.rstrip(b'\x00'))
+                            acknowledgment_number=client_seq + 1
                         )
                         logger.debug(
                             f"Enviando SYNACK+ERROR al usuario {user_id} "
@@ -331,7 +344,7 @@ def start(host, port, storage):
         while True:
             try:
                 data, addr = sock.recvfrom(MAX_UDP_PAYLOAD_LENGTH)
-            except Exception as e:
+            except Exception:
                 continue
             try:
                 packet = Packet.from_bytes(data)

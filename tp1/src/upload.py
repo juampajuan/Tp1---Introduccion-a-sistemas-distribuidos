@@ -5,9 +5,8 @@ import logging
 from lib.handshakeWithServer import handshake_with_server
 from lib.selective_repeat import upload_selective_repeat
 from lib.stop_and_wait import upload_stop_and_wait
-from socket import *
+import socket
 from lib.constants import PAYLOAD_SIZE
-from lib.packet import Packet
 
 # Logger específico para este módulo
 logger = logging.getLogger("[UPLOAD]")
@@ -44,7 +43,8 @@ def parse_args():
             "sw",
             "sr"],
         default="sw",
-        help="Protocolo de recuperación de errores (sw=Stop&Wait, sr=SelectiveRepeat)")
+        help="Protocolo de recuperación de errores "
+             "(sw=Stop&Wait, sr=SelectiveRepeat)")
 
     return p.parse_args()
 
@@ -65,7 +65,7 @@ def main():
 
     server = (args.host, args.port)
 
-    with socket(AF_INET, SOCK_DGRAM) as clientsocket:
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as clientsocket:
 
         user_id = handshake_with_server(
             clientsocket, server, args.protocol, args.name)
@@ -78,7 +78,8 @@ def main():
 
         if args.protocol in protocolos:
             protocolos[args.protocol](
-                clientsocket, user_id, server, filenameWithPath, max_payload_size)
+                clientsocket, user_id, server,
+                filenameWithPath, max_payload_size)
         else:
             logger.error("Protocolo desconocido")
 

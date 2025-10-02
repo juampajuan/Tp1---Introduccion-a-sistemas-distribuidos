@@ -31,7 +31,10 @@ def upload_stop_and_wait(
             while True:
                 payload = f.read(max_payload_size)
                 is_last = (payload == b'')
-                flags = Packet.FLAG_FIN | Packet.FLAG_DATA if is_last else Packet.FLAG_DATA
+                flags = (
+                    Packet.FLAG_FIN | Packet.FLAG_DATA
+                    if is_last else Packet.FLAG_DATA
+                )
 
                 packet = Packet(
                     user_id,
@@ -51,16 +54,17 @@ def upload_stop_and_wait(
                             data, _ = clientsocket.recvfrom(max_payload_size)
                             ack = Packet.from_bytes(data)
                             if ack.connect == 1:
-                                # cliente recibe nuevamente el synack porque se perdio
-                                # el ultimo ack que envio el cliente para que el server cierre el handshake
-                                # reenvio el ultimo ack para que el server
-                                # cierre el handshake
+                                # cliente recibe nuevamente el synack
+                                # porque se perdio el ultimo ack que envio
+                                # el cliente para que el server cierre
+                                # el handshake reenvio el ultimo ack para
+                                # que el server cierre el handshake
+                                val = Packet.FLAG_CONNECT | Packet.FLAG_ACK
                                 ack = Packet(
-                                    user_id, flags=Packet.FLAG_CONNECT | Packet.FLAG_ACK)
+                                    user_id,
+                                    flags=val)
                                 clientsocket.sendto(ack.to_bytes(), server)
                                 continue
-
-                        # logger.debug(f"Recibi ack {ack.acknowledgment_number}")
 
                         if (ack.userId == user_id
                             and ack.ack
@@ -72,7 +76,8 @@ def upload_stop_and_wait(
                     retries += 1
                     if retries > MAX_RETRIES:
                         logger.error(
-                            "Número máximo de reintentos alcanzado. Abortando.")
+                            "Número máximo de reintentos alcanzado. "
+                            "Abortando.")
                         return
 
                 if is_last:
@@ -118,8 +123,9 @@ def download_stop_and_wait(
                 package = Packet.from_bytes(data)
                 if package.connect == 1:
                     # cliente recibe nuevamente el synack porque se perdio
-                    # el ultimo ack que envio el cliente para que el server cierre el handshake
-                    # reenvio el ultimo ack que el server cierre el handshake
+                    # el ultimo ack que envio el cliente para que
+                    # el server cierre el handshake reenvio el ultimo ack
+                    # que el server cierre el handshake
                     ack = Packet(
                         user_id, flags=Packet.FLAG_CONNECT | Packet.FLAG_ACK)
                     clientsocket.sendto(ack.to_bytes(), addr)
@@ -136,8 +142,6 @@ def download_stop_and_wait(
                 user_session.sock.sendto(ack.to_bytes(), addr)
             else:
                 clientsocket.sendto(ack.to_bytes(), addr)
-
-            # print(f"[ACTIVE] ACK enviado a userId {user_id}: {ack.to_string()}")
 
             # Consumir DATA sólo si es el seq esperado; luego alternar
             if package.data and package.sequence_number == seq:

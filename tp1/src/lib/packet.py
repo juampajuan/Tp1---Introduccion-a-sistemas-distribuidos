@@ -35,7 +35,8 @@ class Packet:
         self.sequence_number = sequence_number
         self.acknowledgment_number = acknowledgment_number
         self.payload_length = len(payload)
-        self.payload = payload  # Inicialmente vacío, puede crecer dinámicamente
+        # Inicialmente vacío, puede crecer dinámicamente
+        self.payload = payload
 
     @property
     def syn(self):
@@ -92,5 +93,6 @@ class Packet:
             f"connect={int(self.connect)}, data={int(self.data)}, "
             f"sequenceNumber={self.sequence_number}, "
             f"acknowledgmentNumber={self.acknowledgment_number}, "
-            f"payloadLength={len(self.payload)}, payload={self.payload[:20]}...)"
+            f"payloadLength={len(self.payload)},"
+            f" payload={self.payload[:20]}...)"
         )
