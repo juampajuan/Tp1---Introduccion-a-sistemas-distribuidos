@@ -2,12 +2,16 @@
 import argparse
 import os
 import threading, time
-from handshakeWithServer import handshake_with_server 
+import logging
+from handshakeWithServer import handshake_with_server
 from lib.selective_repeat import upload_selective_repeat
 from lib.stop_and_wait import upload_stop_and_wait
 from socket import *
 from lib.constants import PAYLOAD_SIZE, WINDOW_SIZE, SEQUENCE_NUMBER_RANGE,PACKET_HEADER_SIZE
 from lib.packet import Packet
+
+# Logger específico para este módulo
+logger = logging.getLogger("[UPLOAD]")
 
 #constantes
 TIMEOUT = 2  # Timeout en segundos
@@ -30,11 +34,15 @@ def parse_args():
 def main():
     args = parse_args()
 
+    # Configuración del logger global
+    log_level = logging.DEBUG if args.verbose else logging.INFO
+    logging.basicConfig(level=log_level, format='[%(levelname)s] %(message)s')
+
     filenameWithPath = args.src + args.name
 
     # Valido archivo
     if not os.path.isfile(filenameWithPath):
-        print("El archivo no existe")
+        logger.error("El archivo no existe")
         return
 
     server = (args.host, args.port)
@@ -44,14 +52,13 @@ def main():
         user_id = handshake_with_server(clientsocket, server, args.protocol, args.name)
 
         max_payload_size = PAYLOAD_SIZE #pasar a una constante
-    
+
         protocolos = { "sw": upload_stop_and_wait, "sr": upload_selective_repeat}
 
         if args.protocol in protocolos:
             protocolos[args.protocol](clientsocket, user_id, server, filenameWithPath, max_payload_size)
         else:
-                print("Protocolo desconocido")
-    
+            logger.error("Protocolo desconocido")
 
 
 if __name__ == "__main__":

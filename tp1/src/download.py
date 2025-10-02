@@ -5,6 +5,8 @@ from lib.stop_and_wait import download_stop_and_wait
 from lib.selective_repeat import download_selective_repeat
 from lib.constants import PACKET_HEADER_SIZE, PAYLOAD_SIZE
 
+import logging
+logger = logging.getLogger("[DOWNLOAD]")
 
 def parse_args():
     p = argparse.ArgumentParser(description = "Cliente Download (UDP, version mínima)")
@@ -18,6 +20,8 @@ def parse_args():
     return p.parse_args()
 
 def main():
+    log_level = logging.DEBUG if args.verbose else logging.INFO
+    logging.basicConfig(level=log_level, format='[%(levelname)s] %(message)s')
     args = parse_args()
 
     server = (args.host, args.port)
@@ -35,10 +39,10 @@ def main():
             elif  args.protocol == "sr" :
                 download_selective_repeat(clientsocket, user_id, server, filename_with_path, max_packet_size)
             else:
-                print("Funcionalidad desconocida.")
+                logger.error("Funcionalidad desconocida.")
 
     except Exception as e:
-        print(f"Error detectado en instancia de try: Download. {e}")
+        logger.error(f"Error detectado en instancia de try: Download. {e}")
         return
 
 if __name__ == "__main__":
