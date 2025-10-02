@@ -2,10 +2,13 @@ import socket
 import os
 import time
 import queue
+import logging
 
 from .constants import WINDOW_SIZE, SEQUENCE_NUMBER_RANGE, PAYLOAD_SIZE, PACKET_HEADER_SIZE
 from .packet import Packet
 from .tools import format_time
+
+logger = logging.getLogger("SR")
 
 TIMEOUT = 2 /1000  # Timeout en segundos
 MAX_RETRIES = 40 # Número máximo de reintentos para enviar un paquete
@@ -110,8 +113,8 @@ def upload_selective_repeat(clientsocket, user_id, server, src, max_payload_size
     fin = time.perf_counter()
     if not from_server:
         clientsocket.settimeout(None)
-    print(f"Archivo enviado correctamente. Total de bytes enviados: {sent}")
-    print(f"Tiempo total de transferencia: {format_time(fin - ini)} segundos.")
+    logger.info(f"Archivo enviado correctamente. Total de bytes enviados: {sent}")
+    logger.info(f"Tiempo total de transferencia: {format_time(fin - ini)} segundos.")
     return sent
 
 
@@ -166,8 +169,8 @@ def download_selective_repeat(clientsocket, user_id, server, dest, max_payload_s
                     fin_received = True
 
                 if fin_received and len(buffer) == 0:
-                    print(f"[ACTIVE] Paquete final de parte de {server} recibido.")
-                    print(f"Cantidad total recibida: {received_total}.")
+                    logger.debug(f"[ACTIVE] Paquete final de parte de {server} recibido.")
+                    logger.info(f"Cantidad total recibida: {received_total}.")
 
                     # Quedate un ratito re-ACKeando FINs duplicados
                     FIN_LINGER = 0.8   # 0.5–1.0s va bien
@@ -197,7 +200,7 @@ def download_selective_repeat(clientsocket, user_id, server, dest, max_payload_s
                     break
 
         fin = time.perf_counter()
-        print(f"Tiempo total de transferencia: {format_time(fin - ini)}")
+        logger.info(f"Tiempo total de transferencia: {format_time(fin - ini)}")
 
             # fuera de ventana: ya ACKeamos arriba; ignorar payload y seguir
 

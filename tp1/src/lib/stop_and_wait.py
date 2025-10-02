@@ -4,10 +4,13 @@ from .tools import format_time
 import socket
 import time
 import queue
+import logging
 TIMEOUT = 2 /1000  # Timeout en segundos
 MAX_RETRIES = 30  # Timeout en segundos
 timeout_server_dsw = 0.05 # Timeout en segundos
 timeout_client_upload_sw = 0.05 # Timeout en segundos
+
+logger = logging.getLogger("SW")
 
 
 def upload_stop_and_wait(clientsocket, user_id, server, src, max_payload_size, from_server = False, user_session = None):
@@ -22,7 +25,6 @@ def upload_stop_and_wait(clientsocket, user_id, server, src, max_payload_size, f
                 payload = f.read(max_payload_size)
                 is_last = (payload == b'')
                 flags = Packet.FLAG_FIN if is_last else Packet.FLAG_DATA
-                #print(f"Longitud del payload: {len(payload)}")
 
                 packet = Packet(user_id, payload, flags=flags, sequence_number=seq)
 
@@ -37,7 +39,7 @@ def upload_stop_and_wait(clientsocket, user_id, server, src, max_payload_size, f
                             data, _ = clientsocket.recvfrom(max_payload_size)
                             ack = Packet.from_bytes(data)
 
-                        #print(f"Recibi ack {ack.acknowledgment_number}")
+                        #logger.debug(f"Recibi ack {ack.acknowledgment_number}")
 
                         if (ack.userId == user_id
                             and ack.ack
@@ -48,7 +50,7 @@ def upload_stop_and_wait(clientsocket, user_id, server, src, max_payload_size, f
 
                     retries += 1
                     if retries > MAX_RETRIES:
-                        print("Número máximo de reintentos alcanzado. Abortando.")
+                        logger.error("Número máximo de reintentos alcanzado. Abortando.")
                         return
 
                 if is_last:
@@ -60,8 +62,8 @@ def upload_stop_and_wait(clientsocket, user_id, server, src, max_payload_size, f
     finally:
         clientsocket.settimeout(None)
         fin = time.perf_counter()
-    print(f"Archivo enviado correctamente. Total de bytes enviados: {sent}")
-    print(f"Tiempo total de transferencia: {format_time(fin - ini)}")
+    logger.info(f"Archivo enviado correctamente. Total de bytes enviados: {sent}")
+    logger.info(f"Tiempo total de transferencia: {format_time(fin - ini)}")
 
 
 
@@ -84,7 +86,7 @@ def download_stop_and_wait(clientsocket, user_id, addr, dest, max_payload_size, 
                 data, _ = clientsocket.recvfrom(PACKET_HEADER_SIZE + max_payload_size)
                 package = Packet.from_bytes(data)
 
-            #print(f"[ACTIVE] Recibido de userId {user_id}: {package.to_string()}")
+
 
             # Enviar ACK eco del seq recibido (siempre ACKear)
             ack = Packet(
@@ -111,7 +113,7 @@ def download_stop_and_wait(clientsocket, user_id, addr, dest, max_payload_size, 
             # FIN: cerrar cuando llega el FIN (el emisor reintentará hasta que vea este ACK)
             if package.fin:
                 fin = time.perf_counter()
-                print(f"[ACTIVE] Paquete final de parte de {addr} recibido.")
-                print(f"Cantidad total recibida: {received_total}.")
-                print(f"Tiempo total de transferencia: {format_time(fin - ini)} ")
+                logger.debug(f"[ACTIVE] Paquete final de parte de {addr} recibido.")
+                logger.info(f"Cantidad total recibida: {received_total}.")
+                logger.info(f"Tiempo total de transferencia: {format_time(fin - ini)} ")
                 break
