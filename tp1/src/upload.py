@@ -2,7 +2,7 @@
 import argparse
 import os
 import logging
-from handshakeWithServer import handshake_with_server
+from lib.handshakeWithServer import handshake_with_server
 from lib.selective_repeat import upload_selective_repeat
 from lib.stop_and_wait import upload_stop_and_wait
 from socket import *

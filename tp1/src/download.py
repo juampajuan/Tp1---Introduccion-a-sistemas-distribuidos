@@ -1,6 +1,6 @@
 from socket import *
 import argparse
-from handshakeWithServer import handshake_with_server
+from lib.handshakeWithServer import handshake_with_server
 from lib.stop_and_wait import download_stop_and_wait
 from lib.selective_repeat import download_selective_repeat
 from lib.constants import PAYLOAD_SIZE

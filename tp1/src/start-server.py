@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import sys
-from server import start
+from lib.server import start
 import logging
 
 logger = logging.getLogger("START-SERVER")
